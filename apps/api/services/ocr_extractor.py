@@ -1,14 +1,15 @@
 import os
 import re
 import time
-from typing import Dict, Any, Optional, Tuple, List
+from typing import Any
+
 import cv2
 import numpy as np
 import pytesseract
-from PIL import Image
-from apps.api.core.config import settings
 from apps.api.core.audit_logger import audit_logger
+from apps.api.core.config import settings
 from apps.api.schemas.contracts import ExtractedFieldData
+from PIL import Image
 
 # Set tesseract binary path if custom path exists
 if os.path.exists(settings.TESSERACT_CMD):
@@ -64,7 +65,7 @@ class FreeMultimodalOCRExtractor:
     - Stage 3: Deterministic civic entity extraction & Verhoeff / PAN checksum parsing
     """
 
-    def extract(self, file_path: str, doc_type_hint: Optional[str] = None) -> ExtractedFieldData:
+    def extract(self, file_path: str, doc_type_hint: str | None = None) -> ExtractedFieldData:
         start_time = time.time()
 
         # Stage 1: OpenCV Pre-Processing & Layout ROI Segmentation
@@ -97,7 +98,7 @@ class FreeMultimodalOCRExtractor:
 
         return extracted_data
 
-    def _preprocess_and_segment_rois(self, file_path: str) -> Tuple[np.ndarray, Dict[str, Any]]:
+    def _preprocess_and_segment_rois(self, file_path: str) -> tuple[np.ndarray, dict[str, Any]]:
         """
         Stage 1: OpenCV Image Enhancement & Region-of-Interest (ROI) Segmentation.
         Applies CLAHE, bilateral filter, orientation deskew, and isolates photo/signature contours.
@@ -118,7 +119,7 @@ class FreeMultimodalOCRExtractor:
         enhanced = clahe.apply(filtered)
 
         # 3. Detect Face / Portrait ROI (Top or Left half of document)
-        roi_meta: Dict[str, Any] = {}
+        roi_meta: dict[str, Any] = {}
         # Try Haar cascade if available
         cascade_path = os.path.join(cv2.data.haarcascades, "haarcascade_frontalface_default.xml")
         face_found = False
@@ -158,7 +159,7 @@ class FreeMultimodalOCRExtractor:
 
         return enhanced, roi_meta
 
-    def _run_local_ocr(self, enhanced_img: np.ndarray) -> Tuple[str, str]:
+    def _run_local_ocr(self, enhanced_img: np.ndarray) -> tuple[str, str]:
         """
         Stage 2: Run Free Local CPU OCR via Pytesseract / OpenCV binarization.
         """
@@ -182,8 +183,8 @@ class FreeMultimodalOCRExtractor:
     def _parse_civic_entities(
         self,
         text: str,
-        doc_type_hint: Optional[str],
-        roi_meta: Dict[str, Any]
+        doc_type_hint: str | None,
+        roi_meta: dict[str, Any]
     ) -> ExtractedFieldData:
         """
         Stage 3: Deterministic Civic Document Entity & Checksum Parser.

@@ -1,10 +1,13 @@
+
 import pytest
-import os
-from apps.api.services.ocr_extractor import validate_verhoeff, validate_pan_structure, ocr_extractor
-from apps.api.services.statutory_rag import statutory_rag
 from apps.api.services.free_llm_router import free_llm_router
+from apps.api.services.ocr_extractor import (
+    validate_pan_structure,
+    validate_verhoeff,
+)
+from apps.api.services.statutory_rag import statutory_rag
 from apps.api.services.voice_explainer import voice_explainer
-from apps.api.core.config import settings
+
 
 def test_verhoeff_algorithm_validation():
     # Valid Aadhaar numbers generated with Verhoeff D5 algorithm
@@ -80,3 +83,4 @@ async def test_voice_explainer_speech_synthesis():
     assert len(res["statutory_citations"]) > 0
     # Audio buffer should be generated (or empty string if network sandbox blocks websocket)
     assert isinstance(res["audio_base64"], str)
+

@@ -1,22 +1,25 @@
 import os
 import shutil
-from typing import Dict, Any, List
-from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+
+from apps.api.core.audit_logger import audit_logger
 from apps.api.core.config import settings
 from apps.api.core.database import get_db
-from apps.api.core.audit_logger import audit_logger
-from apps.api.models.entities import AuditSession, ExtractedDocument, ReconciliationRecord
-from apps.api.services.ocr_extractor import ocr_extractor
-from apps.api.services.phonetic_reconciler import phonetic_reconciler
-from apps.api.services.statutory_rag import statutory_rag
+from apps.api.models.entities import (
+    AuditSession,
+    ExtractedDocument,
+    ReconciliationRecord,
+)
 from apps.api.schemas.contracts import (
     DocumentUploadResponse,
     LoadSamplePacketRequest,
     ReconciliationResponse,
-    ExtractedFieldData
 )
+from apps.api.services.ocr_extractor import ocr_extractor
+from apps.api.services.phonetic_reconciler import phonetic_reconciler
+from apps.api.services.statutory_rag import statutory_rag
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/ingestion", tags=["Document Ingestion & Phonetic Reconciliation"])
 
@@ -105,7 +108,7 @@ async def load_real_sample_citizen_packet(
         ("marksheet", "marksheet_sample.png")
     ]
 
-    extracted_docs: Dict[str, ExtractedDocument] = {}
+    extracted_docs: dict[str, ExtractedDocument] = {}
 
     for doc_type, filename in sample_files:
         src_path = os.path.join(settings.SAMPLE_DOCS_DIR, filename)

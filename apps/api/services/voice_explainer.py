@@ -1,10 +1,8 @@
-import os
-import io
-import time
 import base64
-from typing import Dict, Any, Optional
+import time
+from typing import Any
+
 import edge_tts
-from apps.api.core.config import settings
 from apps.api.core.audit_logger import audit_logger
 from apps.api.services.free_llm_router import free_llm_router
 from apps.api.services.statutory_rag import statutory_rag
@@ -26,9 +24,9 @@ class FreeVoiceExplainer:
     async def answer_citizen_query_with_voice(
         self,
         query_text: str,
-        session_context: Optional[Dict[str, Any]] = None,
+        session_context: dict[str, Any] | None = None,
         language: str = "en"
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = time.time()
         
         # 1. Statutory Retrieval
@@ -90,3 +88,4 @@ class FreeVoiceExplainer:
             return ""
 
 voice_explainer = FreeVoiceExplainer()
+

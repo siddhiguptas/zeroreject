@@ -1,12 +1,14 @@
-import os
 import io
+import os
 import time
-from typing import Dict, Any, Tuple, Optional
+from typing import Any
+
 import cv2
 import numpy as np
-from PIL import Image
-from apps.api.core.config import settings
 from apps.api.core.audit_logger import audit_logger
+from apps.api.core.config import settings
+from PIL import Image
+
 
 class OpenCVAssetCompiler:
     """
@@ -85,7 +87,7 @@ class OpenCVAssetCompiler:
         image_pil: Image.Image,
         target_width: int,
         target_height: int,
-        pad_color: Tuple[int, int, int] = (255, 255, 255)
+        pad_color: tuple[int, int, int] = (255, 255, 255)
     ) -> Image.Image:
         """Resize image to fit within target bounding box and pad to exact dimensions."""
         original_w, original_h = image_pil.size
@@ -108,7 +110,7 @@ class OpenCVAssetCompiler:
         min_bytes: int,
         max_bytes: int,
         target_dpi: int = 150
-    ) -> Tuple[bytes, int, int]:
+    ) -> tuple[bytes, int, int]:
         """
         Iteratively binary-search JPEG compression quality Q in [10, 95]
         to strictly guarantee file size within [min_bytes, max_bytes].
@@ -160,7 +162,7 @@ class OpenCVAssetCompiler:
         asset_type: str, # "portrait" or "signature"
         session_id: str,
         target_portal: str = "e_district"
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Main pipeline: Ingest raw asset -> Clean/Deskew -> Contour Crop -> Resize -> Binary Compress -> Verify.
         """

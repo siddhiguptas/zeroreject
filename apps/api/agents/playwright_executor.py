@@ -1,11 +1,14 @@
-import os
 import asyncio
 import base64
+import os
 import time
-from typing import Dict, Any, Optional, AsyncGenerator
-from playwright.async_api import async_playwright, Page, Browser, BrowserContext
-from apps.api.core.config import settings
+from collections.abc import AsyncGenerator
+from typing import Any
+
 from apps.api.core.audit_logger import audit_logger
+from apps.api.core.config import settings
+from playwright.async_api import Browser, BrowserContext, Page, async_playwright
+
 
 class PlaywrightBureaucracyAgent:
     """
@@ -16,16 +19,16 @@ class PlaywrightBureaucracyAgent:
     """
 
     def __init__(self):
-        self.active_contexts: Dict[str, Dict[str, Any]] = {}
+        self.active_contexts: dict[str, dict[str, Any]] = {}
 
     async def execute_portal_workflow(
         self,
         session_id: str,
         target_url: str,
-        applicant_data: Dict[str, Any],
-        asset_paths: Dict[str, str], # portrait, signature, affidavit
+        applicant_data: dict[str, Any],
+        asset_paths: dict[str, str], # portrait, signature, affidavit
         chaos_enabled: bool = False
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+    ) -> AsyncGenerator[dict[str, Any], None]:
         start_time = time.time()
         yield {
             "step_index": 0,
@@ -143,7 +146,9 @@ class PlaywrightBureaucracyAgent:
                 if not os.path.exists(sig_path):
                     sig_path = os.path.join(settings.SAMPLE_DOCS_DIR, "signature_raw.png")
                 if not os.path.exists(aff_path):
-                    from apps.api.services.affidavit_generator import affidavit_generator
+                    from apps.api.services.affidavit_generator import (
+                        affidavit_generator,
+                    )
                     aff_res = affidavit_generator.generate_affidavit(
                         session_id=session_id,
                         applicant_name_aadhaar="Ramesh Kumar Sharma",
@@ -246,7 +251,7 @@ class PlaywrightBureaucracyAgent:
                 "step_index": 99,
                 "step_name": "EXECUTION_EXCEPTION",
                 "status": "FAILED",
-                "message": f"Execution halted due to exception: {str(e)}",
+                "message": f"Execution halted due to exception: {e!s}",
                 "screenshot_base64": shot_err,
                 "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             }
@@ -258,7 +263,7 @@ class PlaywrightBureaucracyAgent:
         self,
         session_id: str,
         otp_code: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Human-in-the-loop OTP authorization submission."""
         ctx_data = self.active_contexts.get(session_id)
         if not ctx_data or "page" not in ctx_data:

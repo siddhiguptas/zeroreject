@@ -7,6 +7,7 @@ surname inversion, address drift) to test the live OCR, OpenCV, and phonetic pip
 """
 
 import os
+
 from PIL import Image, ImageDraw, ImageFont
 
 ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets", "real_sample_docs"))
@@ -39,7 +40,6 @@ def generate_portrait(output_path):
     for r in range(300, 0, -10):
         alpha = int(255 * (r / 300))
         # Head & shoulders silhouette styling
-        pass
 
     # Draw neck and shoulders
     draw.polygon([(160, 750), (190, 520), (410, 520), (440, 750)], fill=(32, 54, 82)) # Navy blue collar/suit

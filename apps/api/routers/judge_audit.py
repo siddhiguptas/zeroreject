@@ -1,14 +1,14 @@
 import time
+
 import httpx
-from typing import Dict, Any, List
-from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, text
+from apps.api.core.audit_logger import audit_logger
 from apps.api.core.config import settings
 from apps.api.core.database import get_db
-from apps.api.core.audit_logger import audit_logger
-from apps.api.models.entities import AuditSession, ExtractedDocument, CompiledAsset
+from apps.api.models.entities import AuditSession, CompiledAsset, ExtractedDocument
 from apps.api.schemas.contracts import JudgeTelemetryResponse
+from fastapi import APIRouter, Depends
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/audit", tags=["Judge Audit & Live Telemetry"])
 

@@ -1,6 +1,7 @@
 import pytest
 from apps.api.services.phonetic_reconciler import phonetic_reconciler
 
+
 def test_transliterate_indic_to_latin():
     devanagari_name = "रमेश कुमार शर्मा"
     latin = phonetic_reconciler.transliterate_indic_to_latin(devanagari_name)

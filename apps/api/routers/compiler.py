@@ -1,15 +1,19 @@
 import os
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+
 from apps.api.core.config import settings
 from apps.api.core.database import get_db
-from apps.api.models.entities import AuditSession, ExtractedDocument, CompiledAsset
-from apps.api.services.opencv_compiler import opencv_compiler
+from apps.api.models.entities import AuditSession, CompiledAsset
+from apps.api.schemas.contracts import (
+    CompileAssetsRequest,
+    CompileAssetsResponse,
+    CompiledAssetDetail,
+)
 from apps.api.services.affidavit_generator import affidavit_generator
-from apps.api.schemas.contracts import CompileAssetsRequest, CompileAssetsResponse, CompiledAssetDetail
+from apps.api.services.opencv_compiler import opencv_compiler
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/compiler", tags=["OpenCV Asset Compiler & Affidavit Studio"])
 

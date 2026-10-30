@@ -1,13 +1,12 @@
-from typing import Optional, Dict, Any
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
 from apps.api.services.voice_explainer import voice_explainer
+from fastapi import APIRouter
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/voice", tags=["100% Free Multilingual Voice Copilot"])
 
 class VoiceQueryRequest(BaseModel):
     query: str
-    session_id: Optional[str] = None
+    session_id: str | None = None
     language: str = "en" # "en" or "hi"
 
 @router.post("/explain")
@@ -24,3 +23,4 @@ async def explain_with_voice(req: VoiceQueryRequest):
         language=req.language
     )
     return res
+

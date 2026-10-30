@@ -1,12 +1,21 @@
 import os
 import time
-from typing import Dict, Any, List, Optional
-from reportlab.lib.pagesizes import A4
-from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from apps.api.core.config import settings
+from typing import Any
+
 from apps.api.core.audit_logger import audit_logger
+from apps.api.core.config import settings
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.platypus import (
+    HRFlowable,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
+
 
 class StatutoryAffidavitGenerator:
     """
@@ -24,10 +33,10 @@ class StatutoryAffidavitGenerator:
         father_name: str,
         dob: str,
         address: str,
-        id_numbers: Dict[str, str],
-        citations: List[Dict[str, str]],
+        id_numbers: dict[str, str],
+        citations: list[dict[str, str]],
         place: str = "Etawah",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = time.time()
         filename = f"{session_id}_statutory_affidavit.pdf"
         output_path = os.path.join(settings.AFFIDAVITS_DIR, filename)

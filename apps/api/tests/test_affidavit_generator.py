@@ -1,5 +1,7 @@
 import os
+
 from apps.api.services.affidavit_generator import affidavit_generator
+
 
 def test_generate_statutory_affidavit():
     result = affidavit_generator.generate_affidavit(

@@ -1,8 +1,10 @@
 import uuid
-from datetime import datetime, timezone
-from sqlalchemy import String, Integer, Float, Boolean, Text, DateTime, JSON, ForeignKey
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from datetime import UTC, datetime
+
 from apps.api.core.database import Base
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 
 def generate_uuid() -> str:
     return str(uuid.uuid4())
@@ -13,8 +15,8 @@ class AuditSession(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
     workflow_target: Mapped[str] = mapped_column(String(64), default="e_district_income")
     status: Mapped[str] = mapped_column(String(32), default="INITIALIZED")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
     # Relationships
     documents = relationship("ExtractedDocument", back_populates="session", cascade="all, delete-orphan")
@@ -45,7 +47,7 @@ class ExtractedDocument(Base):
     
     ocr_confidence: Mapped[float] = mapped_column(Float, default=1.0)
     extraction_details: Mapped[dict] = mapped_column(JSON, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
     session = relationship("AuditSession", back_populates="documents")
 
@@ -68,7 +70,7 @@ class ReconciliationRecord(Base):
     discrepancy_flags: Mapped[list] = mapped_column(JSON, default=list)
     curation_recommendations: Mapped[list] = mapped_column(JSON, default=list)
     
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
     session = relationship("AuditSession", back_populates="reconciliation")
 
@@ -91,7 +93,7 @@ class CompiledAsset(Base):
     compliant_with_portal: Mapped[bool] = mapped_column(Boolean, default=True)
     audit_telemetry: Mapped[dict] = mapped_column(JSON, default=dict)
     
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
     session = relationship("AuditSession", back_populates="compiled_assets")
 
@@ -108,7 +110,7 @@ class ExecutionCheckpoint(Base):
     chaos_injected: Mapped[bool] = mapped_column(Boolean, default=False)
     error_recovery_count: Mapped[int] = mapped_column(Integer, default=0)
     screenshot_path: Mapped[str] = mapped_column(String(512), default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
     session = relationship("AuditSession", back_populates="checkpoints")
 
@@ -120,5 +122,5 @@ class PostalCache(Base):
     state: Mapped[str] = mapped_column(String(128))
     talukas: Mapped[list] = mapped_column(JSON, default=list)
     raw_response: Mapped[dict] = mapped_column(JSON, default=dict)
-    cached_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    cached_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 

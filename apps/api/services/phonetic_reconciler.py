@@ -1,23 +1,23 @@
 import re
 import time
-from typing import List, Dict, Any, Tuple
+from typing import Any
+
 import httpx
+import jellyfish
+from apps.api.core.audit_logger import audit_logger
+from apps.api.core.config import settings
+from apps.api.schemas.contracts import (
+    DoubleMetaphoneMatch,
+    PhoneticBreakdown,
+    PostalValidationResult,
+)
 from indic_transliteration import sanscript
 from indic_transliteration.sanscript import transliterate
 from metaphone import doublemetaphone
-import jellyfish
-from apps.api.core.config import settings
-from apps.api.core.audit_logger import audit_logger
-from apps.api.schemas.contracts import (
-    PhoneticBreakdown,
-    DoubleMetaphoneMatch,
-    PostalValidationResult,
-    ReconciliationResponse
-)
 
 HONORIFICS = {
     "SHRI", "SMT", "LATE", "MOHD", "MD", "KR", "KUMARI",
-    "DR", "MR", "MRS", "MASTER", "SHREE", "SRI", "KUMAR", "KUMARI"
+    "DR", "MR", "MRS", "MASTER", "SHREE", "SRI", "KUMAR"
 }
 
 class DeterministicPhoneticReconciler:
@@ -29,7 +29,7 @@ class DeterministicPhoneticReconciler:
     """
 
     def __init__(self):
-        self._postal_cache: Dict[str, Dict[str, Any]] = {}
+        self._postal_cache: dict[str, dict[str, Any]] = {}
 
     def transliterate_indic_to_latin(self, text: str) -> str:
         """Transliterate Devanagari / Indic script to canonical phonetic Latin."""
@@ -48,7 +48,7 @@ class DeterministicPhoneticReconciler:
                 pass
         return text
 
-    def tokenize_and_strip_honorifics(self, name: str) -> List[str]:
+    def tokenize_and_strip_honorifics(self, name: str) -> list[str]:
         """Normalize casing, strip honorifics, and return clean alphabetical tokens."""
         clean = re.sub(r'[^a-zA-Z\s]', ' ', name).upper()
         tokens = [t.strip() for t in clean.split() if t.strip()]
@@ -256,7 +256,7 @@ class DeterministicPhoneticReconciler:
         father_breakdown: PhoneticBreakdown,
         dob_match: bool,
         postal_valid: bool
-    ) -> Tuple[float, str, List[str], List[Dict[str, str]]]:
+    ) -> tuple[float, str, list[str], list[dict[str, str]]]:
         """
         Compute deterministic Rejection Risk Score (0–100%) and recommendations.
         """

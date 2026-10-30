@@ -1,11 +1,12 @@
-import time
 import re
-from typing import Dict, Any, List, Optional, Tuple
-from rank_bm25 import BM25Okapi
+import time
+from typing import Any
+
 from apps.api.core.audit_logger import audit_logger
+from rank_bm25 import BM25Okapi
 
 # Real official statutory documents & guidelines seeded for civic governance
-STATUTORY_KNOWLEDGE_CORPUS: List[Dict[str, Any]] = [
+STATUTORY_KNOWLEDGE_CORPUS: list[dict[str, Any]] = [
     {
         "id": "STAT_PASSPORT_ANNEX_E",
         "portal": "Passport Seva Kendra (Ministry of External Affairs)",
@@ -66,7 +67,7 @@ class LocalHybridStatutoryRAG:
         self.tokenized_corpus = [self._tokenize(doc["keywords"] + " " + doc["clause"]) for doc in self.corpus]
         self.bm25 = BM25Okapi(self.tokenized_corpus)
 
-    def _tokenize(self, text: str) -> List[str]:
+    def _tokenize(self, text: str) -> list[str]:
         """Sub-word and token normalization."""
         clean = re.sub(r'[^a-zA-Z0-9\s]', ' ', text.lower())
         tokens = clean.split()
@@ -80,10 +81,10 @@ class LocalHybridStatutoryRAG:
     def search(
         self,
         query: str,
-        workflow_target: Optional[str] = None,
+        workflow_target: str | None = None,
         top_k: int = 3,
         abstention_threshold: float = 0.20
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Execute BM25 hybrid search with statutory ranking and abstention guardrail.
         """
@@ -95,7 +96,7 @@ class LocalHybridStatutoryRAG:
         doc_scores = self.bm25.get_scores(q_tokens)
         max_score = max(doc_scores) if len(doc_scores) > 0 and max(doc_scores) > 0 else 1.0
 
-        scored_results: List[Tuple[float, Dict[str, Any]]] = []
+        scored_results: list[tuple[float, dict[str, Any]]] = []
         for i, score in enumerate(doc_scores):
             normalized_score = score / max_score
             doc = self.corpus[i].copy()
@@ -104,13 +105,7 @@ class LocalHybridStatutoryRAG:
             # Workflow domain boost if targeted
             if workflow_target:
                 tgt = workflow_target.lower()
-                if ("edistrict" in tgt or "e_district" in tgt) and "e-district" in doc["portal"].lower():
-                    normalized_score += 0.25
-                elif "passport" in tgt and "passport" in doc["portal"].lower():
-                    normalized_score += 0.25
-                elif "epfo" in tgt and "epfo" in doc["portal"].lower():
-                    normalized_score += 0.25
-                elif "scholarship" in tgt and "scholarship" in doc["portal"].lower():
+                if ("edistrict" in tgt or "e_district" in tgt) and "e-district" in doc["portal"].lower() or "passport" in tgt and "passport" in doc["portal"].lower() or "epfo" in tgt and "epfo" in doc["portal"].lower() or "scholarship" in tgt and "scholarship" in doc["portal"].lower():
                     normalized_score += 0.25
 
             # Abstention Guardrail: reject matches below threshold
@@ -143,7 +138,7 @@ class LocalHybridStatutoryRAG:
         return final_docs
 
     # Backwards compatibility helper for existing service calls
-    def query_statute(self, query_text: str, workflow_target: Optional[str] = None) -> List[Dict[str, Any]]:
+    def query_statute(self, query_text: str, workflow_target: str | None = None) -> list[dict[str, Any]]:
         return self.search(query=query_text, workflow_target=workflow_target, top_k=2)
 
 statutory_rag = LocalHybridStatutoryRAG()

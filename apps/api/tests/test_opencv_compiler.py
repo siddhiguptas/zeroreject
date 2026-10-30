@@ -1,8 +1,8 @@
 import os
-import pytest
-from PIL import Image
+
 from apps.api.services.opencv_compiler import opencv_compiler
-from apps.api.core.config import settings
+from PIL import Image
+
 
 def test_signature_compilation_and_byte_ceiling(tmp_path):
     # Create an oversized mock raw signature (600x300, ~150KB)

@@ -1,8 +1,9 @@
 import os
-import uuid
 import re
+import uuid
 from typing import Optional
-from fastapi import FastAPI, Request, Form, UploadFile, File, Response, HTTPException
+
+from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -10,18 +11,17 @@ app = FastAPI(title="State e-District & Citizen Services Portal", version="2026.
 
 # In-memory session & chaos state
 portal_sessions = {}
-chaos_state = {
-    "enabled": False,
-    "failure_count": 0,
-    "max_failures_before_recovery": 1
-}
+chaos_state = {"enabled": False, "failure_count": 0, "max_failures_before_recovery": 1}
+
 
 # HTML Template Helper
 def render_page(title: str, body_html: str, step: int = 1) -> str:
-    steps_indicator = "".join([
-        f'<div class="flex-1 text-center py-2 border-b-4 {"border-blue-800 font-bold text-blue-900" if s == step else "border-gray-300 text-gray-500"}">Step {s}: {["Personal", "Address", "Uploads", "Verification"][s-1]}</div>'
-        for s in range(1, 5)
-    ])
+    steps_indicator = "".join(
+        [
+            f'<div class="flex-1 text-center py-2 border-b-4 {"border-blue-800 font-bold text-blue-900" if s == step else "border-gray-300 text-gray-500"}">Step {s}: {["Personal", "Address", "Uploads", "Verification"][s - 1]}</div>'
+            for s in range(1, 5)
+        ]
+    )
     return f"""
     <!DOCTYPE html>
     <html lang="en">
@@ -78,6 +78,7 @@ def render_page(title: str, body_html: str, step: int = 1) -> str:
     </html>
     """
 
+
 @app.get("/", response_class=HTMLResponse)
 @app.get("/step1", response_class=HTMLResponse)
 async def get_step1(request: Request):
@@ -128,21 +129,19 @@ async def get_step1(request: Request):
     """
     return HTMLResponse(content=render_page("Step 1 - Personal Details", body, step=1))
 
+
 @app.post("/step1", response_class=HTMLResponse)
 async def post_step1(
-    applicant_name: str = Form(...),
-    father_name: str = Form(...),
-    dob: str = Form(...),
-    gender: str = Form(...)
+    applicant_name: str = Form(...), father_name: str = Form(...), dob: str = Form(...), gender: str = Form(...)
 ):
     gov_sess_id = str(uuid.uuid4())
     portal_sessions[gov_sess_id] = {
         "applicant_name": applicant_name,
         "father_name": father_name,
         "dob": dob,
-        "gender": gender
+        "gender": gender,
     }
-    
+
     # Render Step 2
     body = f"""
     <h2 class="text-xl font-bold text-gray-800 mb-2">Step 2: Permanent Address & Jurisdiction</h2>
@@ -189,21 +188,19 @@ async def post_step1(
     """
     return HTMLResponse(content=render_page("Step 2 - Address Details", body, step=2))
 
+
 @app.post("/step2", response_class=HTMLResponse)
 async def post_step2(
     gov_sess_id: str = Form(...),
     address_line: str = Form(...),
     pincode: str = Form(...),
     district: str = Form(...),
-    state: str = Form(...)
+    state: str = Form(...),
 ):
     if gov_sess_id in portal_sessions:
-        portal_sessions[gov_sess_id].update({
-            "address_line": address_line,
-            "pincode": pincode,
-            "district": district,
-            "state": state
-        })
+        portal_sessions[gov_sess_id].update(
+            {"address_line": address_line, "pincode": pincode, "district": district, "state": state}
+        )
 
     # Render Step 3 (Uploads with strict specs)
     body = f"""
@@ -252,12 +249,13 @@ async def post_step2(
     """
     return HTMLResponse(content=render_page("Step 3 - Biometric Uploads", body, step=3))
 
+
 @app.post("/step3", response_class=HTMLResponse)
 async def post_step3(
     gov_sess_id: str = Form(...),
     portrait_file: UploadFile = File(...),
     signature_file: UploadFile = File(...),
-    affidavit_file: UploadFile = File(...)
+    affidavit_file: UploadFile = File(...),
 ):
     # CHAOS INJECTION HOOK:
     # If chaos mode is active and failure_count < max, throw real 502 Bad Gateway
@@ -276,7 +274,7 @@ async def post_step3(
                     </p>
                 </body>
             </html>
-            """
+            """,
         )
 
     # Read uploaded bytes
@@ -294,12 +292,12 @@ async def post_step3(
                 f"""
                 <div class="bg-red-50 border-l-4 border-red-600 p-4">
                     <h3 class="font-bold text-red-800">REJECTION ERROR: Signature File Exceeds Ceiling</h3>
-                    <p class="text-sm text-red-700 mt-1">Uploaded signature size: {len(sig_bytes)} bytes ({round(len(sig_bytes)/1024, 2)} KB). Maximum allowed is 20 KB.</p>
+                    <p class="text-sm text-red-700 mt-1">Uploaded signature size: {len(sig_bytes)} bytes ({round(len(sig_bytes) / 1024, 2)} KB). Maximum allowed is 20 KB.</p>
                     <a href="javascript:history.back()" class="inline-block mt-4 bg-red-700 text-white px-4 py-2 rounded text-sm">← Re-upload Validated File</a>
                 </div>
                 """,
-                step=3
-            )
+                step=3,
+            ),
         )
 
     # 2. Affidavit must be <= 100 KB
@@ -311,11 +309,11 @@ async def post_step3(
                 f"""
                 <div class="bg-red-50 border-l-4 border-red-600 p-4">
                     <h3 class="font-bold text-red-800">REJECTION ERROR: Supporting PDF Exceeds 100 KB</h3>
-                    <p class="text-sm text-red-700 mt-1">Uploaded PDF size: {round(len(aff_bytes)/1024, 2)} KB. Maximum allowed is 100 KB.</p>
+                    <p class="text-sm text-red-700 mt-1">Uploaded PDF size: {round(len(aff_bytes) / 1024, 2)} KB. Maximum allowed is 100 KB.</p>
                 </div>
                 """,
-                step=3
-            )
+                step=3,
+            ),
         )
 
     # Render Step 4: Human-in-the-Loop OTP Authorization Gate
@@ -332,9 +330,9 @@ async def post_step3(
         <div class="bg-emerald-50 border border-emerald-300 rounded p-4 mb-6 text-sm text-emerald-950">
             <span class="font-bold">✓ All Biometric & Statutory Assets Successfully Validated:</span>
             <ul class="list-disc list-inside text-xs mt-1 space-y-0.5">
-                <li>Portrait: {round(len(port_bytes)/1024, 1)} KB (200x230 px compliant)</li>
-                <li>Signature: {round(len(sig_bytes)/1024, 1)} KB (140x60 px, under 20 KB compliant)</li>
-                <li>Annexure Affidavit: {round(len(aff_bytes)/1024, 1)} KB (PDF under 100 KB compliant)</li>
+                <li>Portrait: {round(len(port_bytes) / 1024, 1)} KB (200x230 px compliant)</li>
+                <li>Signature: {round(len(sig_bytes) / 1024, 1)} KB (140x60 px, under 20 KB compliant)</li>
+                <li>Annexure Affidavit: {round(len(aff_bytes) / 1024, 1)} KB (PDF under 100 KB compliant)</li>
             </ul>
         </div>
 
@@ -378,11 +376,10 @@ async def post_step3(
     """
     return HTMLResponse(content=render_page("Step 4 - OTP Authorization", body, step=4))
 
+
 @app.post("/finalize", response_class=HTMLResponse)
 async def finalize_submission(
-    gov_sess_id: str = Form(...),
-    citizen_otp: str = Form(...),
-    citizen_consent: Optional[str] = Form(None)
+    gov_sess_id: str = Form(...), citizen_otp: str = Form(...), citizen_consent: str | None = Form(None)
 ):
     ack_number = f"UP-EDIST-2026-{uuid.uuid4().hex[:8].upper()}"
     applicant = portal_sessions.get(gov_sess_id, {}).get("applicant_name", "Ramesh Kumar Sharma")
@@ -428,6 +425,7 @@ async def finalize_submission(
     """
     return HTMLResponse(content=render_page("Submission Receipt", body, step=4))
 
+
 # Chaos Toggle Endpoints for Judges
 @app.post("/api/chaos/toggle")
 async def toggle_chaos(request: Request):
@@ -437,10 +435,10 @@ async def toggle_chaos(request: Request):
         chaos_state["enabled"] = not chaos_state["enabled"]
     else:
         chaos_state["enabled"] = bool(enable)
-    chaos_state["failure_count"] = 0 # reset failures
+    chaos_state["failure_count"] = 0  # reset failures
     return {"chaos_mode": chaos_state["enabled"], "failures_injected": chaos_state["failure_count"]}
+
 
 @app.get("/api/chaos/status")
 async def get_chaos_status():
     return chaos_state
-

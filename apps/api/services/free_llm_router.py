@@ -1,10 +1,11 @@
-import os
-import time
 import json
-from typing import Dict, Any, Optional, List
+import time
+from typing import Any
+
 import httpx
-from apps.api.core.config import settings
 from apps.api.core.audit_logger import audit_logger
+from apps.api.core.config import settings
+
 
 class FreeLLMRouter:
     """
@@ -20,9 +21,9 @@ class FreeLLMRouter:
     async def generate_explanation(
         self,
         prompt: str,
-        context: Optional[Dict[str, Any]] = None,
+        context: dict[str, Any] | None = None,
         language: str = "en"
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         start_time = time.time()
         provider_used = "DETERMINISTIC_STATUTORY_ENGINE"
 
@@ -56,7 +57,7 @@ class FreeLLMRouter:
         res_deterministic = self._synthesize_deterministic_explanation(prompt, context, language)
         return self._wrap_response(res_deterministic, "ZeroKey_Deterministic_Rule_Compiler", start_time)
 
-    async def _call_groq(self, prompt: str, context: Optional[Dict[str, Any]]) -> Optional[str]:
+    async def _call_groq(self, prompt: str, context: dict[str, Any] | None) -> str | None:
         headers = {
             "Authorization": f"Bearer {settings.GROQ_API_KEY}",
             "Content-Type": "application/json"
@@ -80,7 +81,7 @@ class FreeLLMRouter:
                 return data["choices"][0]["message"]["content"]
         return None
 
-    async def _call_openrouter(self, prompt: str, context: Optional[Dict[str, Any]]) -> Optional[str]:
+    async def _call_openrouter(self, prompt: str, context: dict[str, Any] | None) -> str | None:
         headers = {
             "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
             "Content-Type": "application/json"
@@ -99,7 +100,7 @@ class FreeLLMRouter:
                 return data["choices"][0]["message"]["content"]
         return None
 
-    async def _call_ollama(self, prompt: str, context: Optional[Dict[str, Any]]) -> Optional[str]:
+    async def _call_ollama(self, prompt: str, context: dict[str, Any] | None) -> str | None:
         async with httpx.AsyncClient(timeout=2.0) as client:
             resp = await client.post(
                 f"{settings.OLLAMA_BASE_URL}/api/generate",
@@ -116,7 +117,7 @@ class FreeLLMRouter:
     def _synthesize_deterministic_explanation(
         self,
         prompt: str,
-        context: Optional[Dict[str, Any]],
+        context: dict[str, Any] | None,
         language: str = "en"
     ) -> str:
         """
@@ -151,7 +152,7 @@ class FreeLLMRouter:
             f"Postal jurisdiction for PIN {pincode} ({district}, UP) is verified with India Post."
         )
 
-    def _wrap_response(self, text: str, provider: str, start_time: float) -> Dict[str, Any]:
+    def _wrap_response(self, text: str, provider: str, start_time: float) -> dict[str, Any]:
         duration_ms = (time.time() - start_time) * 1000
         audit_logger.log_tool_execution(
             tool_name="Free_LLM_Router_Inference",
@@ -169,3 +170,4 @@ class FreeLLMRouter:
         }
 
 free_llm_router = FreeLLMRouter()
+

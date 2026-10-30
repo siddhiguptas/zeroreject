@@ -1,15 +1,16 @@
-import json
 import asyncio
-from typing import Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+import json
+import time
+
+from apps.api.agents.playwright_executor import playwright_agent
 from apps.api.core.config import settings
 from apps.api.core.database import get_db
-from apps.api.models.entities import AuditSession, ExtractedDocument, CompiledAsset
-from apps.api.agents.playwright_executor import playwright_agent
-from apps.api.schemas.contracts import OTPAuthorizationRequest, FinalSubmissionReceipt
+from apps.api.models.entities import AuditSession
+from apps.api.schemas.contracts import FinalSubmissionReceipt, OTPAuthorizationRequest
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/execution", tags=["Playwright Self-Healing Agent & SSE Stream"])
 
