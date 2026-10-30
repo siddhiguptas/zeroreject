@@ -35,3 +35,4 @@ async def test_validate_pincode_live():
     res = await phonetic_reconciler.validate_pincode_live("206124")
     assert res.valid is True
     assert "Etawah" in res.district or "Uttar Pradesh" in res.state
+

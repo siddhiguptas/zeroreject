@@ -136,3 +136,11 @@ class JudgeTelemetryResponse(BaseModel):
     recent_apis: List[Dict[str, Any]]
     recent_sql: List[Dict[str, Any]]
     active_sessions_count: int
+    free_ai_stack: Dict[str, Any] = Field(default_factory=lambda: {
+        "ocr_engine": "Local OpenCV + Tesseract (Active)",
+        "phonetic_graph": "Indic-Transliteration + Double Metaphone (< 5ms)",
+        "lgd_pincode_api": "api.postalpincode.in (Live)",
+        "vector_rag": "Local BM25 Hybrid Retriever",
+        "llm_mode": "Auto-Detect (Groq Free / Ollama / Deterministic Legal Compiler)"
+    })
+

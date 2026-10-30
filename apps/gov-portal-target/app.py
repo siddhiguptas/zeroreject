@@ -443,3 +443,4 @@ async def toggle_chaos(request: Request):
 @app.get("/api/chaos/status")
 async def get_chaos_status():
     return chaos_state
+

@@ -119,4 +119,5 @@ export interface JudgeTelemetryResponse {
   recent_apis: Array<Record<string, any>>;
   recent_sql: Array<Record<string, any>>;
   active_sessions_count: number;
+  free_ai_stack?: Record<string, string>;
 }

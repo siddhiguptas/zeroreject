@@ -181,3 +181,4 @@ async def download_asset(
 
     media_type = "application/pdf" if asset.format_type == "PDF" else "image/jpeg"
     return FileResponse(asset.file_path, media_type=media_type, filename=os.path.basename(asset.file_path))
+

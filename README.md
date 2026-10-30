@@ -231,3 +231,4 @@ The user interface follows the **Sovereign Archival Editorial** design aesthetic
 
 - **ZeroReject Core Architecture Team**
 - Built with pride for **FORGE '26 (Track 1: Civic Pulse, Digital Governance & Public Information)**
+

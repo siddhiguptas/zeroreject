@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -24,9 +25,14 @@ class Settings(BaseSettings):
     INDIA_POST_API_BASE: str = "https://api.postalpincode.in/pincode"
     DATA_GOV_IN_API_KEY: str = ""
     
-    # Multimodal Vision (Gemini 2.5 Flash)
-    GEMINI_API_KEY: str = ""
+    # Free Multi-Provider LLM & Vision Stack (Zero-Credit & 100% Free Out-of-the-Box)
+    GROQ_API_KEY: Optional[str] = None
+    OPENROUTER_API_KEY: Optional[str] = None
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    HF_TOKEN: Optional[str] = None
+    GEMINI_API_KEY: Optional[str] = None
     GEMINI_MODEL: str = "gemini-2.5-flash"
+    DEFAULT_LLM_PROVIDER: str = "auto" # auto (best available), groq, openrouter, ollama, deterministic
     
     # Local Deterministic OCR
     TESSERACT_CMD: str = "/opt/homebrew/bin/tesseract"
@@ -59,3 +65,4 @@ for directory in [
     settings.SAMPLE_DOCS_DIR
 ]:
     os.makedirs(directory, exist_ok=True)
+

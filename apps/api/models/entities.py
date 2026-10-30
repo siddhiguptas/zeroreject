@@ -121,3 +121,4 @@ class PostalCache(Base):
     talukas: Mapped[list] = mapped_column(JSON, default=list)
     raw_response: Mapped[dict] = mapped_column(JSON, default=dict)
     cached_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+

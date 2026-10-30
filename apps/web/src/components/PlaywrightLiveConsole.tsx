@@ -267,3 +267,4 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
     </div>
   );
 };
+

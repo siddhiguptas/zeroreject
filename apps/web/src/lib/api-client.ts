@@ -85,6 +85,26 @@ export async function getChaosStatus(): Promise<{ enabled: boolean; failure_coun
   return res.json();
 }
 
+export async function askVoiceCopilot(
+  query: string,
+  sessionId?: string,
+  language: string = 'en'
+): Promise<{
+  query: string;
+  explanation: string;
+  audio_base64: string;
+  language: string;
+  statutory_citations: Array<{ statute: string; clause: string; url: string }>;
+}> {
+  const res = await fetch(`${API_BASE}/api/voice/explain`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, session_id: sessionId, language }),
+  });
+  if (!res.ok) throw new Error('Voice copilot query failed');
+  return res.json();
+}
+
 export function createExecutionEventSource(
   sessionId: string,
   chaosMode: boolean,
@@ -110,3 +130,4 @@ export function createExecutionEventSource(
 
   return () => eventSource.close();
 }
+

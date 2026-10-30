@@ -253,3 +253,4 @@ class OpenCVAssetCompiler:
         }
 
 opencv_compiler = OpenCVAssetCompiler()
+

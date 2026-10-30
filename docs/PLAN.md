@@ -83,3 +83,4 @@
 - [ ] `docs/TRADEOFFS_AND_QA.md`: Comprehensive judge Q&A guide and engineering tradeoff defense.
 - [ ] Root `README.md`: Architecture diagrams, 1-command startup, API reference, demo walkthrough.
 - [ ] Git Commit #10.
+

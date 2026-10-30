@@ -83,3 +83,4 @@ class JudgeAuditLogger:
         return hashlib.sha256(data).hexdigest()
 
 audit_logger = JudgeAuditLogger()
+

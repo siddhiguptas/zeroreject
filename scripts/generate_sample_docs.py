@@ -153,9 +153,9 @@ def generate_aadhaar_card(portrait_path, output_path):
     draw.text((430, 315), addr_line1, fill=(20, 20, 20), font=f_body)
     draw.text((430, 340), addr_line2, fill=(20, 20, 20), font=f_body)
     
-    # Aadhaar Number Banner
+    # Aadhaar Number Banner (Verhoeff checksum verified: 4892 7104 3827)
     draw.rectangle([(50, 420), (950, 490)], fill=(245, 247, 250))
-    draw.text((270, 435), "4892  7104  3829", fill=(180, 40, 30), font=f_uid)
+    draw.text((270, 435), "4892  7104  3827", fill=(180, 40, 30), font=f_uid)
     
     # Bottom slogan
     draw.line([(50, 520), (950, 520)], fill=(255, 153, 51), width=3)
@@ -311,3 +311,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

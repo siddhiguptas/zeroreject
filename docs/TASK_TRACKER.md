@@ -88,3 +88,14 @@ Status Legend:
 - [x] Finalize `README.md` with system diagrams and judge demo script
 - [x] Verify end-to-end user journey (upload -> reconcile -> compile -> execute -> chaos -> heal -> OTP)
 - [x] Git Commit 10: `docs(readme): finalize setup instructions, architecture diagrams, and FORGE '26 judge Q&A guide`
+
+---
+
+## Phase 7: Architecture Override — 100% Free Zero-Credit AI & OCR Stack
+- [x] Stage 1-3 Free Optical & Civic Entity Parser with Verhoeff D5 algorithm (`apps/api/services/ocr_extractor.py`)
+- [x] Free local BM25 + Sub-Word TF-IDF Hybrid Statutory RAG (`apps/api/services/statutory_rag.py`)
+- [x] 4-Tier Free AI Router with Zero-Key Deterministic Fallback (`apps/api/services/free_llm_router.py`)
+- [x] 100% Free Multilingual Voice Copilot with Edge-TTS (`apps/api/services/voice_explainer.py` & `/api/voice/explain`)
+- [x] Free AI Stack badges & runtime key configuration modal in UI (`TelemetryRibbon.tsx` & `JudgeAuditDrawer.tsx`)
+- [x] 15/15 Pytest unit and integration tests passing with 0 paid API keys in environment
+- [x] Git Commit 11: `feat(free-ai-stack): replace paid Gemini API with keyless local OCR, hybrid RAG, and multi-provider free LLM router`

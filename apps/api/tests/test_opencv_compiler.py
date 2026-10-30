@@ -44,3 +44,4 @@ def test_portrait_compilation(tmp_path):
     assert compiled["height_px"] == 230
     assert compiled["file_size_bytes"] <= 51200 # <= 50 KB
     assert compiled["compliant"] is True
+

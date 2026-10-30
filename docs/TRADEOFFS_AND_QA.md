@@ -76,3 +76,4 @@
 ### Q3: "Why not let an LLM auto-submit the application directly to the live government website?"
 **Answer**:
 > "Because in sovereign civic governance, citizen consent is legally non-negotiable. Submitting an application without citizen verification violates UIDAI and IT Act guidelines. ZeroReject implements a strict **Human-in-the-Loop OTP Authorization Gate**: the autonomous agent does 95% of the heavy lifting (curing assets, formatting fields, surviving 502 server crashes), but strictly halts at the final OTP/consent step, giving the citizen full agency to inspect what is being filed before authorizing submission."
+

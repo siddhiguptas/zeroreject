@@ -26,3 +26,4 @@ def test_generate_statutory_affidavit():
     with open(result["output_path"], "rb") as f:
         header = f.read(8)
         assert header.startswith(b"%PDF-1.")
+

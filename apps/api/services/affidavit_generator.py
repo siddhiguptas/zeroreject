@@ -219,3 +219,4 @@ class StatutoryAffidavitGenerator:
         }
 
 affidavit_generator = StatutoryAffidavitGenerator()
+

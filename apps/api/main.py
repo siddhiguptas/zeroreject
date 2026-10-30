@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from apps.api.core.config import settings
 from apps.api.core.database import init_db
-from apps.api.routers import ingestion, compiler, execution, judge_audit
+from apps.api.routers import ingestion, compiler, execution, judge_audit, voice
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -32,6 +32,7 @@ app.include_router(ingestion.router)
 app.include_router(compiler.router)
 app.include_router(execution.router)
 app.include_router(judge_audit.router)
+app.include_router(voice.router)
 
 @app.get("/health")
 async def health_check():
@@ -47,3 +48,4 @@ async def health_check():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host=settings.API_HOST, port=settings.API_PORT, reload=True)
+

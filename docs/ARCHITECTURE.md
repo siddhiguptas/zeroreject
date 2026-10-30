@@ -170,3 +170,4 @@ To comply with the Hackathon Hard Rules:
 2. **Live India Post PIN Validation**: Actual HTTP GET queries to `https://api.postalpincode.in/pincode/{pin}` returning real post office names, talukas, and districts.
 3. **Live Database Traces**: SQLAlchemy asynchronously executes and logs real queries in SQLite (WAL mode) / PostgreSQL.
 4. **Live Target Portal on Port 8090**: A fully functional government portal running with real cookies, sessions, CSRF, and byte-level validation.
+
