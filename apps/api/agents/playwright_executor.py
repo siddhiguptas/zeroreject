@@ -35,27 +35,27 @@ class PlaywrightBureaucracyAgent:
             "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         }
 
-        async with async_playwright() as p:
-            # Launch headless chromium with slow-mo for stable recording
-            browser: Browser = await p.chromium.launch(
-                headless=settings.PLAYWRIGHT_HEADLESS,
-                slow_mo=settings.PLAYWRIGHT_SLOW_MO_MS
-            )
-            context: BrowserContext = await browser.new_context(
-                viewport={"width": 1280, "height": 800},
-                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) ZeroReject-AutonomousAgent/2.0"
-            )
-            page: Page = await context.new_page()
+        playwright_instance = await async_playwright().start()
+        browser: Browser = await playwright_instance.chromium.launch(
+            headless=settings.PLAYWRIGHT_HEADLESS,
+            slow_mo=settings.PLAYWRIGHT_SLOW_MO_MS
+        )
+        context: BrowserContext = await browser.new_context(
+            viewport={"width": 1280, "height": 800},
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) ZeroReject-AutonomousAgent/2.0"
+        )
+        page: Page = await context.new_page()
 
-            # Store in active contexts for human-in-the-loop OTP resumption
-            self.active_contexts[session_id] = {
-                "browser": browser,
-                "context": context,
-                "page": page,
-                "status": "IN_PROGRESS"
-            }
+        # Store in active contexts for human-in-the-loop OTP resumption
+        self.active_contexts[session_id] = {
+            "playwright": playwright_instance,
+            "browser": browser,
+            "context": context,
+            "page": page,
+            "status": "IN_PROGRESS"
+        }
 
-            try:
+        try:
                 # STEP 1: Navigate to Target Portal & Fill Personal Details
                 yield {
                     "step_index": 1,
@@ -240,19 +240,19 @@ class PlaywrightBureaucracyAgent:
                     source_statute="IT Act 2000 (Section 43A - Citizen Consent & Security)"
                 )
 
-            except Exception as e:
-                shot_err = await self._capture_screenshot(page)
-                yield {
-                    "step_index": 99,
-                    "step_name": "EXECUTION_EXCEPTION",
-                    "status": "FAILED",
-                    "message": f"Execution halted due to exception: {str(e)}",
-                    "screenshot_base64": shot_err,
-                    "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-                }
-            finally:
-                # Do not immediately close browser so citizen can submit OTP via session
-                pass
+        except Exception as e:
+            shot_err = await self._capture_screenshot(page)
+            yield {
+                "step_index": 99,
+                "step_name": "EXECUTION_EXCEPTION",
+                "status": "FAILED",
+                "message": f"Execution halted due to exception: {str(e)}",
+                "screenshot_base64": shot_err,
+                "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            }
+        finally:
+            # Do not immediately close browser so citizen can submit OTP via session
+            pass
 
     async def submit_otp_and_finalize(
         self,
@@ -290,7 +290,16 @@ class PlaywrightBureaucracyAgent:
                 "message": "Official submission stamped and recorded by State Government Portal."
             }
         finally:
-            await browser.close()
+            try:
+                await browser.close()
+            except Exception:
+                pass
+            pw = ctx_data.get("playwright")
+            if pw:
+                try:
+                    await pw.stop()
+                except Exception:
+                    pass
             if session_id in self.active_contexts:
                 del self.active_contexts[session_id]
 
