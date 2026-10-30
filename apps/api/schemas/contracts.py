@@ -1,0 +1,138 @@
+from typing import List, Dict, Any, Optional
+from pydantic import BaseModel, Field
+
+# Ingestion Schemas
+class ExtractedFieldData(BaseModel):
+    full_name: str = ""
+    full_name_regional: str = ""
+    father_or_spouse_name: str = ""
+    dob: str = ""
+    gender: str = ""
+    id_number: str = ""
+    address: str = ""
+    pincode: str = ""
+    confidence: float = 1.0
+    detected_script: str = "Devanagari/Latin"
+    raw_text: str = ""
+
+class DocumentUploadResponse(BaseModel):
+    document_id: str
+    session_id: str
+    doc_type: str
+    filename: str
+    file_size_bytes: int
+    sha256_hash: str
+    extracted_fields: ExtractedFieldData
+
+class LoadSamplePacketRequest(BaseModel):
+    workflow_target: str = "e_district_income"
+
+# Deterministic Phonetic & Postal Schemas
+class DoubleMetaphoneMatch(BaseModel):
+    name_a: str
+    name_b: str
+    primary_code_a: str
+    primary_code_b: str
+    secondary_code_a: str
+    secondary_code_b: str
+    match_level: str # EXACT, SECONDARY, NONE
+
+class PhoneticBreakdown(BaseModel):
+    original_a: str
+    original_b: str
+    transliterated_a: str
+    transliterated_b: str
+    normalized_tokens_a: List[str]
+    normalized_tokens_b: List[str]
+    double_metaphone: DoubleMetaphoneMatch
+    jaro_winkler_score: float
+    token_sort_ratio: float
+    token_set_ratio: float
+    initial_expansion_detected: bool
+    reconciled_canonical_name: str
+    pass_threshold: bool
+
+class PostalValidationResult(BaseModel):
+    pincode: str
+    valid: bool
+    taluka_or_subdistrict: str
+    district: str
+    state: str
+    post_offices: List[str]
+    latency_ms: float
+    is_cached: bool
+
+class ReconciliationResponse(BaseModel):
+    session_id: str
+    workflow_target: str
+    rejection_risk_score: float = Field(..., description="0 to 100% computed rejection risk")
+    status: str # PASS, CURABLE_DISCREPANCY, FATAL_MISMATCH
+    name_reconciliation: PhoneticBreakdown
+    father_reconciliation: PhoneticBreakdown
+    dob_reconciliation: Dict[str, Any]
+    postal_reconciliation: PostalValidationResult
+    statutory_citations: List[Dict[str, str]]
+    curation_recommendations: List[str]
+
+# OpenCV Compiler Schemas
+class CompileAssetsRequest(BaseModel):
+    session_id: str
+    target_portal: str = "e_district"
+
+class CompiledAssetDetail(BaseModel):
+    asset_id: str
+    asset_type: str # portrait, signature, affidavit_pdf
+    width_px: int
+    height_px: int
+    file_size_bytes: int
+    file_size_kb: float
+    target_window_kb: str
+    sha256_hash: str
+    download_url: str
+    compliant: bool
+    telemetry: Dict[str, Any]
+
+class CompileAssetsResponse(BaseModel):
+    session_id: str
+    assets: List[CompiledAssetDetail]
+    execution_ready: bool
+
+# Playwright Agent Schemas
+class ExecutionStartRequest(BaseModel):
+    session_id: str
+    target_url: Optional[str] = None
+    chaos_mode_enabled: bool = False
+
+class ExecutionStepEvent(BaseModel):
+    step_index: int
+    step_name: str
+    status: str # RUNNING, COMPLETED, RETRYING, HEALED, AWAITING_OTP, SUBMITTED, FAILED
+    message: str
+    screenshot_base64: Optional[str] = None
+    dom_changes: Optional[str] = None
+    error_recovery_count: int = 0
+    timestamp_utc: str
+
+class OTPAuthorizationRequest(BaseModel):
+    session_id: str
+    otp_code: str
+    citizen_consent: bool = True
+
+class FinalSubmissionReceipt(BaseModel):
+    session_id: str
+    acknowledgement_number: str
+    submission_timestamp: str
+    receipt_pdf_url: str
+    filing_status: str
+
+# Judge Audit & Telemetry Schemas
+class JudgeTelemetryResponse(BaseModel):
+    system_status: str
+    backend_latency_ms: float
+    india_post_latency_ms: float
+    db_dialect: str
+    wal_enabled: bool
+    recent_tools: List[Dict[str, Any]]
+    recent_apis: List[Dict[str, Any]]
+    recent_sql: List[Dict[str, Any]]
+    active_sessions_count: int
