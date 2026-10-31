@@ -40,15 +40,18 @@ async def stream_playwright_execution(
     recon_res = await db.execute(select(ReconciliationRecord).where(ReconciliationRecord.session_id == session_id))
     recon = recon_res.scalar_one_or_none()
 
+    phonetic_matrix = recon.phonetic_matrix if recon else {}
+    postal_details = recon.postal_details if recon else {}
+
     applicant_data = {
-        "applicant_name": recon.name_a if (recon and recon.name_a) else "Ramesh Kumar Sharma",
-        "father_name": recon.father_a if (recon and recon.father_a) else "Dina Nath Sharma",
-        "dob": recon.dob_a if (recon and recon.dob_a) else "14/08/1996",
-        "gender": "MALE",
-        "address_line": "Vill. Primary Residence",
-        "pincode": recon.pincode_query if (recon and recon.pincode_query) else "206124",
-        "district": recon.district_verified if (recon and recon.district_verified) else "Etawah",
-        "state": "Uttar Pradesh"
+        "applicant_name": phonetic_matrix.get("original_a") or (recon.name_a if recon else "Ramesh Kumar Sharma"),
+        "father_name": phonetic_matrix.get("father_a") or (recon.father_a if recon else "Dina Nath Sharma"),
+        "dob": phonetic_matrix.get("dob_a") or (recon.dob_a if recon else "14/08/1996"),
+        "gender": phonetic_matrix.get("gender") or "MALE",
+        "address_line": phonetic_matrix.get("address") or "Vill. Primary Residence",
+        "pincode": postal_details.get("pincode") or (recon.pincode_query if recon else "206124"),
+        "district": postal_details.get("district") or (recon.district_verified if recon else "Etawah"),
+        "state": postal_details.get("state") or "Uttar Pradesh"
     }
 
     asset_paths = {

@@ -141,19 +141,31 @@ class OpenCVAssetCompiler:
 
         # If highest quality still lower than min_bytes, pad with zero-metadata comment
         if best_data and len(best_data) < min_bytes:
-            padding_needed = min_bytes - len(best_data) + 64
+            padding_needed = (min_bytes - len(best_data)) + 512
             buffer = io.BytesIO()
             image_pil.save(
                 buffer,
                 format="JPEG",
-                quality=92,
+                quality=best_q,
                 comment=b"ZEROREJECT_SOVEREIGN_PAD_" + (b"X" * padding_needed),
                 dpi=(target_dpi, target_dpi)
             )
             padded_data = buffer.getvalue()
             if min_bytes <= len(padded_data) <= max_bytes:
-                return padded_data, 92, 8
-            return best_data, best_q, 7
+                return padded_data, best_q, 8
+            elif len(padded_data) > max_bytes:
+                # Clamp to max_bytes - 1024
+                clamp_pad = max(16, max_bytes - len(best_data) - 1024)
+                buf_clamp = io.BytesIO()
+                image_pil.save(
+                    buf_clamp,
+                    format="JPEG",
+                    quality=best_q,
+                    comment=b"ZEROREJECT_SOVEREIGN_PAD_" + (b"X" * clamp_pad),
+                    dpi=(target_dpi, target_dpi)
+                )
+                return buf_clamp.getvalue(), best_q, 8
+            return padded_data, best_q, 8
 
         return (best_data if best_data else data), best_q, 7
 
@@ -176,10 +188,10 @@ class OpenCVAssetCompiler:
         #   Signature: 140x60 px, 5KB <= size <= 19.5KB (strictly < 20KB)
         if asset_type == "signature":
             target_w, target_h = 140, 60
-            min_kb, max_kb = 6.0, 19.5
+            min_kb, max_kb = 5.0, 19.5
         else: # portrait
             target_w, target_h = 200, 230
-            min_kb, max_kb = 12.0, 48.0
+            min_kb, max_kb = 8.0, 48.0
 
         min_bytes = int(min_kb * 1024)
         max_bytes = int(max_kb * 1024)

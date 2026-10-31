@@ -62,6 +62,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
 
   // File Input Refs for Custom Document Upload
   const aadhaarInputRef = useRef<HTMLInputElement | null>(null);
+  const aadhaarBackInputRef = useRef<HTMLInputElement | null>(null);
   const panInputRef = useRef<HTMLInputElement | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const sigInputRef = useRef<HTMLInputElement | null>(null);
@@ -379,62 +380,113 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
               {/* MODE A: CUSTOM DOCUMENT UPLOAD GRID */}
               {intakeMode === 'upload' && (
                 <div className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {/* 1. Primary ID (Aadhaar / Voter ID / Passport) */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3.5">
+                    {/* 1. Primary ID - Front (Aadhaar Front / Passport / Voter ID) */}
                     <div
                       onClick={() => aadhaarInputRef.current?.click()}
-                      className={`bg-white border-2 border-dashed rounded-xl p-4 cursor-pointer transition-all hover:border-[#162A45] shadow-sm flex flex-col justify-between ${
-                        uploadedDocs['aadhaar'] ? 'border-emerald-500 bg-emerald-50/20' : 'border-[#DFDBD2]'
+                      className={`bg-white border-2 border-dashed rounded-xl p-3.5 cursor-pointer transition-all hover:border-[#162A45] shadow-sm flex flex-col justify-between ${
+                        uploadedDocs['aadhaar_front'] || uploadedDocs['aadhaar'] ? 'border-emerald-500 bg-emerald-50/20' : 'border-[#DFDBD2]'
                       }`}
                     >
                       <input
                         type="file"
                         ref={aadhaarInputRef}
-                        onChange={(e) => e.target.files?.[0] && handleFileUpload('aadhaar', e.target.files[0])}
+                        onChange={(e) => e.target.files?.[0] && handleFileUpload('aadhaar_front', e.target.files[0])}
                         accept="image/*,.pdf"
                         className="hidden"
                       />
                       <div>
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-xs font-mono font-bold text-[#162A45]">Primary Identity *</span>
-                          <span className="text-[10px] bg-blue-50 text-blue-800 px-1.5 py-0.5 rounded font-mono font-bold">Aadhaar/Passport</span>
+                        <div className="flex justify-between items-center mb-1.5">
+                          <span className="text-xs font-mono font-bold text-[#162A45]">Aadhaar Front *</span>
+                          <span className="text-[9px] bg-blue-50 text-blue-800 px-1 py-0.5 rounded font-mono font-bold">Front &amp; Photo</span>
                         </div>
-                        <p className="text-[11px] text-[#525866] mb-3">
-                          Upload Aadhaar, Passport or Voter ID scan for UIDAI Verhoeff validation.
+                        <p className="text-[10px] text-[#525866] mb-2 leading-relaxed">
+                          Front scan containing Photo, Name, DOB, and 12-digit UID.
                         </p>
                       </div>
 
-                      {uploadingDocType === 'aadhaar' ? (
-                        <div className="py-6 flex flex-col items-center justify-center text-xs font-mono text-[#162A45] space-y-2">
-                          <Loader2 className="w-6 h-6 animate-spin text-[#162A45]" />
-                          <span>Executing OCR &amp; Checksums...</span>
+                      {uploadingDocType === 'aadhaar_front' ? (
+                        <div className="py-5 flex flex-col items-center justify-center text-xs font-mono text-[#162A45] space-y-1.5">
+                          <Loader2 className="w-5 h-5 animate-spin text-[#162A45]" />
+                          <span className="text-[10px]">Extracting Front...</span>
                         </div>
-                      ) : uploadedDocs['aadhaar'] ? (
-                        <div className="bg-emerald-50 border border-emerald-300 rounded p-2.5 text-[11px] font-mono text-emerald-950 space-y-1">
-                          <div className="flex items-center space-x-1.5 font-bold text-emerald-800">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                            <span className="truncate">{uploadedDocs['aadhaar'].filename}</span>
+                      ) : (uploadedDocs['aadhaar_front'] || uploadedDocs['aadhaar']) ? (
+                        <div className="bg-emerald-50 border border-emerald-300 rounded p-2 text-[10px] font-mono text-emerald-950 space-y-1">
+                          <div className="flex items-center space-x-1 font-bold text-emerald-800">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                            <span className="truncate">{(uploadedDocs['aadhaar_front'] || uploadedDocs['aadhaar']).filename}</span>
                           </div>
-                          <div className="text-[10px] text-emerald-900 border-t border-emerald-200 pt-1">
-                            <div>Name: <strong>{uploadedDocs['aadhaar'].extracted_fields.full_name || 'Detected in Scan'}</strong></div>
-                            <div>ID: <strong>{uploadedDocs['aadhaar'].extracted_fields.id_number || 'UIDAI Matched'}</strong></div>
-                            <div>PIN: <strong>{uploadedDocs['aadhaar'].extracted_fields.pincode || 'Extracted'}</strong></div>
+                          <div className="text-[9px] text-emerald-900 border-t border-emerald-200 pt-1 space-y-0.5">
+                            <div>Name: <strong>{(uploadedDocs['aadhaar_front'] || uploadedDocs['aadhaar']).extracted_fields.full_name || 'Detected in Scan'}</strong></div>
+                            <div>DOB: <strong>{(uploadedDocs['aadhaar_front'] || uploadedDocs['aadhaar']).extracted_fields.dob || 'Extracted'}</strong></div>
+                            <div>UID: <strong>{(uploadedDocs['aadhaar_front'] || uploadedDocs['aadhaar']).extracted_fields.id_number || 'Verhoeff Valid'}</strong></div>
                           </div>
-                          <span className="text-[9px] text-blue-700 underline block pt-0.5">Click to replace file</span>
+                          <span className="text-[8px] text-blue-700 underline block pt-0.5">Click to replace</span>
                         </div>
                       ) : (
-                        <div className="py-6 flex flex-col items-center justify-center text-xs font-mono text-gray-500 border border-dashed border-gray-200 rounded-lg bg-gray-50/50">
-                          <FileUp className="w-6 h-6 text-gray-400 mb-1" />
-                          <span className="font-semibold text-gray-700">Drop Aadhaar / ID Scan</span>
-                          <span className="text-[10px] text-gray-400">PNG, JPG, PDF (Max 15MB)</span>
+                        <div className="py-5 flex flex-col items-center justify-center text-xs font-mono text-gray-500 border border-dashed border-gray-200 rounded-lg bg-gray-50/50">
+                          <FileUp className="w-5 h-5 text-gray-400 mb-1" />
+                          <span className="font-semibold text-gray-700 text-[11px]">Aadhaar Front</span>
+                          <span className="text-[9px] text-gray-400">JPG, PNG, PDF</span>
                         </div>
                       )}
                     </div>
 
-                    {/* 2. Secondary ID (PAN / Marksheet) */}
+                    {/* 2. Primary ID - Back (Aadhaar Back: Address & C/O) */}
+                    <div
+                      onClick={() => aadhaarBackInputRef.current?.click()}
+                      className={`bg-white border-2 border-dashed rounded-xl p-3.5 cursor-pointer transition-all hover:border-[#162A45] shadow-sm flex flex-col justify-between ${
+                        uploadedDocs['aadhaar_back'] ? 'border-emerald-500 bg-emerald-50/20' : 'border-[#DFDBD2]'
+                      }`}
+                    >
+                      <input
+                        type="file"
+                        ref={aadhaarBackInputRef}
+                        onChange={(e) => e.target.files?.[0] && handleFileUpload('aadhaar_back', e.target.files[0])}
+                        accept="image/*,.pdf"
+                        className="hidden"
+                      />
+                      <div>
+                        <div className="flex justify-between items-center mb-1.5">
+                          <span className="text-xs font-mono font-bold text-[#162A45]">Aadhaar Back *</span>
+                          <span className="text-[9px] bg-indigo-50 text-indigo-800 px-1 py-0.5 rounded font-mono font-bold">Address &amp; C/O</span>
+                        </div>
+                        <p className="text-[10px] text-[#525866] mb-2 leading-relaxed">
+                          Back scan containing Address, Tehsil, District, PIN &amp; Guardian.
+                        </p>
+                      </div>
+
+                      {uploadingDocType === 'aadhaar_back' ? (
+                        <div className="py-5 flex flex-col items-center justify-center text-xs font-mono text-[#162A45] space-y-1.5">
+                          <Loader2 className="w-5 h-5 animate-spin text-[#162A45]" />
+                          <span className="text-[10px]">Extracting Back...</span>
+                        </div>
+                      ) : uploadedDocs['aadhaar_back'] ? (
+                        <div className="bg-emerald-50 border border-emerald-300 rounded p-2 text-[10px] font-mono text-emerald-950 space-y-1">
+                          <div className="flex items-center space-x-1 font-bold text-emerald-800">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                            <span className="truncate">{uploadedDocs['aadhaar_back'].filename}</span>
+                          </div>
+                          <div className="text-[9px] text-emerald-900 border-t border-emerald-200 pt-1 space-y-0.5">
+                            <div>C/O: <strong>{uploadedDocs['aadhaar_back'].extracted_fields.father_or_spouse_name || 'Guardian Extracted'}</strong></div>
+                            <div>PIN: <strong>{uploadedDocs['aadhaar_back'].extracted_fields.pincode || 'Extracted'}</strong></div>
+                            <div className="truncate">Addr: <strong>{uploadedDocs['aadhaar_back'].extracted_fields.address?.slice(0, 20) || 'Verified'}...</strong></div>
+                          </div>
+                          <span className="text-[8px] text-blue-700 underline block pt-0.5">Click to replace</span>
+                        </div>
+                      ) : (
+                        <div className="py-5 flex flex-col items-center justify-center text-xs font-mono text-gray-500 border border-dashed border-gray-200 rounded-lg bg-gray-50/50">
+                          <FileUp className="w-5 h-5 text-gray-400 mb-1" />
+                          <span className="font-semibold text-gray-700 text-[11px]">Aadhaar Back</span>
+                          <span className="text-[9px] text-gray-400">Address &amp; PIN Scan</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 3. Secondary ID (PAN / Marksheet) */}
                     <div
                       onClick={() => panInputRef.current?.click()}
-                      className={`bg-white border-2 border-dashed rounded-xl p-4 cursor-pointer transition-all hover:border-[#162A45] shadow-sm flex flex-col justify-between ${
+                      className={`bg-white border-2 border-dashed rounded-xl p-3.5 cursor-pointer transition-all hover:border-[#162A45] shadow-sm flex flex-col justify-between ${
                         uploadedDocs['pan'] ? 'border-emerald-500 bg-emerald-50/20' : 'border-[#DFDBD2]'
                       }`}
                     >
@@ -446,46 +498,46 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                         className="hidden"
                       />
                       <div>
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-xs font-mono font-bold text-[#162A45]">Secondary Identity *</span>
-                          <span className="text-[10px] bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded font-mono font-bold">PAN / Marksheet</span>
+                        <div className="flex justify-between items-center mb-1.5">
+                          <span className="text-xs font-mono font-bold text-[#162A45]">Secondary ID *</span>
+                          <span className="text-[9px] bg-amber-50 text-amber-800 px-1 py-0.5 rounded font-mono font-bold">PAN / Marksheet</span>
                         </div>
-                        <p className="text-[11px] text-[#525866] mb-3">
-                          Upload PAN Card or 10th Marksheet to test phonetic cross-referencing.
+                        <p className="text-[10px] text-[#525866] mb-2 leading-relaxed">
+                          PAN Card or Marksheet for cross-referencing and name verification.
                         </p>
                       </div>
 
                       {uploadingDocType === 'pan' ? (
-                        <div className="py-6 flex flex-col items-center justify-center text-xs font-mono text-[#162A45] space-y-2">
-                          <Loader2 className="w-6 h-6 animate-spin text-[#162A45]" />
-                          <span>Parsing PAN / Marksheet...</span>
+                        <div className="py-5 flex flex-col items-center justify-center text-xs font-mono text-[#162A45] space-y-1.5">
+                          <Loader2 className="w-5 h-5 animate-spin text-[#162A45]" />
+                          <span className="text-[10px]">Parsing PAN Card...</span>
                         </div>
                       ) : uploadedDocs['pan'] ? (
-                        <div className="bg-emerald-50 border border-emerald-300 rounded p-2.5 text-[11px] font-mono text-emerald-950 space-y-1">
-                          <div className="flex items-center space-x-1.5 font-bold text-emerald-800">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <div className="bg-emerald-50 border border-emerald-300 rounded p-2 text-[10px] font-mono text-emerald-950 space-y-1">
+                          <div className="flex items-center space-x-1 font-bold text-emerald-800">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
                             <span className="truncate">{uploadedDocs['pan'].filename}</span>
                           </div>
-                          <div className="text-[10px] text-emerald-900 border-t border-emerald-200 pt-1">
+                          <div className="text-[9px] text-emerald-900 border-t border-emerald-200 pt-1 space-y-0.5">
                             <div>Name: <strong>{uploadedDocs['pan'].extracted_fields.full_name || 'Detected in Scan'}</strong></div>
-                            <div>ID: <strong>{uploadedDocs['pan'].extracted_fields.id_number || 'PAN Matched'}</strong></div>
-                            <div>DOB: <strong>{uploadedDocs['pan'].extracted_fields.dob || 'Extracted'}</strong></div>
+                            <div>PAN: <strong>{uploadedDocs['pan'].extracted_fields.id_number || 'PAN Matched'}</strong></div>
+                            <div>Father: <strong>{uploadedDocs['pan'].extracted_fields.father_or_spouse_name || 'Extracted'}</strong></div>
                           </div>
-                          <span className="text-[9px] text-blue-700 underline block pt-0.5">Click to replace file</span>
+                          <span className="text-[8px] text-blue-700 underline block pt-0.5">Click to replace</span>
                         </div>
                       ) : (
-                        <div className="py-6 flex flex-col items-center justify-center text-xs font-mono text-gray-500 border border-dashed border-gray-200 rounded-lg bg-gray-50/50">
-                          <FileUp className="w-6 h-6 text-gray-400 mb-1" />
-                          <span className="font-semibold text-gray-700">Drop PAN or Marksheet</span>
-                          <span className="text-[10px] text-gray-400">PNG, JPG, PDF (Max 15MB)</span>
+                        <div className="py-5 flex flex-col items-center justify-center text-xs font-mono text-gray-500 border border-dashed border-gray-200 rounded-lg bg-gray-50/50">
+                          <FileUp className="w-5 h-5 text-gray-400 mb-1" />
+                          <span className="font-semibold text-gray-700 text-[11px]">PAN or Marksheet</span>
+                          <span className="text-[9px] text-gray-400">JPG, PNG, PDF</span>
                         </div>
                       )}
                     </div>
 
-                    {/* 3. Portrait Photo (Optional) */}
+                    {/* 4. Citizen Photo (Optional / Auto-crop from Front) */}
                     <div
                       onClick={() => photoInputRef.current?.click()}
-                      className={`bg-white border-2 border-dashed rounded-xl p-4 cursor-pointer transition-all hover:border-[#162A45] shadow-sm flex flex-col justify-between ${
+                      className={`bg-white border-2 border-dashed rounded-xl p-3.5 cursor-pointer transition-all hover:border-[#162A45] shadow-sm flex flex-col justify-between ${
                         uploadedDocs['portrait'] ? 'border-emerald-500 bg-emerald-50/20' : 'border-[#DFDBD2]'
                       }`}
                     >
@@ -497,44 +549,44 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                         className="hidden"
                       />
                       <div>
-                        <div className="flex justify-between items-center mb-2">
+                        <div className="flex justify-between items-center mb-1.5">
                           <span className="text-xs font-mono font-bold text-[#162A45]">Citizen Photo</span>
-                          <span className="text-[10px] bg-purple-50 text-purple-800 px-1.5 py-0.5 rounded font-mono font-bold">Optional</span>
+                          <span className="text-[9px] bg-purple-50 text-purple-800 px-1 py-0.5 rounded font-mono font-bold">Auto-Crop</span>
                         </div>
-                        <p className="text-[11px] text-[#525866] mb-3">
-                          Upload citizen passport photograph for OpenCV 200x230 px curing.
+                        <p className="text-[10px] text-[#525866] mb-2 leading-relaxed">
+                          Upload passport photo, or auto-crops directly from Aadhaar Front!
                         </p>
                       </div>
 
                       {uploadingDocType === 'portrait' ? (
-                        <div className="py-6 flex flex-col items-center justify-center text-xs font-mono text-[#162A45] space-y-2">
-                          <Loader2 className="w-6 h-6 animate-spin text-[#162A45]" />
-                          <span>Processing Photo...</span>
+                        <div className="py-5 flex flex-col items-center justify-center text-xs font-mono text-[#162A45] space-y-1.5">
+                          <Loader2 className="w-5 h-5 animate-spin text-[#162A45]" />
+                          <span className="text-[10px]">Processing Photo...</span>
                         </div>
                       ) : uploadedDocs['portrait'] ? (
-                        <div className="bg-emerald-50 border border-emerald-300 rounded p-2.5 text-[11px] font-mono text-emerald-950 space-y-1">
-                          <div className="flex items-center space-x-1.5 font-bold text-emerald-800">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <div className="bg-emerald-50 border border-emerald-300 rounded p-2 text-[10px] font-mono text-emerald-950 space-y-1">
+                          <div className="flex items-center space-x-1 font-bold text-emerald-800">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
                             <span className="truncate">{uploadedDocs['portrait'].filename}</span>
                           </div>
-                          <p className="text-[10px] text-emerald-900 border-t border-emerald-200 pt-1">
-                            Ready for Lanczos crop &amp; &lt;= 50KB compression in Step 3.
+                          <p className="text-[9px] text-emerald-900 border-t border-emerald-200 pt-1">
+                            Ready for 200x230 px &amp; &lt;= 50KB compression in Step 3.
                           </p>
-                          <span className="text-[9px] text-blue-700 underline block pt-0.5">Click to replace photo</span>
+                          <span className="text-[8px] text-blue-700 underline block pt-0.5">Click to replace</span>
                         </div>
                       ) : (
-                        <div className="py-6 flex flex-col items-center justify-center text-xs font-mono text-gray-500 border border-dashed border-gray-200 rounded-lg bg-gray-50/50">
-                          <Upload className="w-6 h-6 text-gray-400 mb-1" />
-                          <span className="font-semibold text-gray-700">Drop Portrait Photo</span>
-                          <span className="text-[10px] text-gray-400">JPG, PNG (Auto-sample fallback)</span>
+                        <div className="py-5 flex flex-col items-center justify-center text-xs font-mono text-gray-500 border border-dashed border-gray-200 rounded-lg bg-gray-50/50">
+                          <Upload className="w-5 h-5 text-gray-400 mb-1" />
+                          <span className="font-semibold text-gray-700 text-[11px]">Portrait Photo</span>
+                          <span className="text-[9px] text-gray-400">Auto-crops from Aadhaar</span>
                         </div>
                       )}
                     </div>
 
-                    {/* 4. Signature (Optional) */}
+                    {/* 5. Signature (Optional / Auto-crop from PAN) */}
                     <div
                       onClick={() => sigInputRef.current?.click()}
-                      className={`bg-white border-2 border-dashed rounded-xl p-4 cursor-pointer transition-all hover:border-[#162A45] shadow-sm flex flex-col justify-between ${
+                      className={`bg-white border-2 border-dashed rounded-xl p-3.5 cursor-pointer transition-all hover:border-[#162A45] shadow-sm flex flex-col justify-between ${
                         uploadedDocs['signature'] ? 'border-emerald-500 bg-emerald-50/20' : 'border-[#DFDBD2]'
                       }`}
                     >
@@ -546,36 +598,36 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                         className="hidden"
                       />
                       <div>
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-xs font-mono font-bold text-[#162A45]">Handwritten Signature</span>
-                          <span className="text-[10px] bg-purple-50 text-purple-800 px-1.5 py-0.5 rounded font-mono font-bold">Optional</span>
+                        <div className="flex justify-between items-center mb-1.5">
+                          <span className="text-xs font-mono font-bold text-[#162A45]">Signature</span>
+                          <span className="text-[9px] bg-purple-50 text-purple-800 px-1 py-0.5 rounded font-mono font-bold">Auto-Crop</span>
                         </div>
-                        <p className="text-[11px] text-[#525866] mb-3">
-                          Upload handwritten signature scan for adaptive contour extraction.
+                        <p className="text-[10px] text-[#525866] mb-2 leading-relaxed">
+                          Upload signature scan, or auto-crops directly from PAN Card!
                         </p>
                       </div>
 
                       {uploadingDocType === 'signature' ? (
-                        <div className="py-6 flex flex-col items-center justify-center text-xs font-mono text-[#162A45] space-y-2">
-                          <Loader2 className="w-6 h-6 animate-spin text-[#162A45]" />
-                          <span>Processing Signature...</span>
+                        <div className="py-5 flex flex-col items-center justify-center text-xs font-mono text-[#162A45] space-y-1.5">
+                          <Loader2 className="w-5 h-5 animate-spin text-[#162A45]" />
+                          <span className="text-[10px]">Processing Signature...</span>
                         </div>
                       ) : uploadedDocs['signature'] ? (
-                        <div className="bg-emerald-50 border border-emerald-300 rounded p-2.5 text-[11px] font-mono text-emerald-950 space-y-1">
-                          <div className="flex items-center space-x-1.5 font-bold text-emerald-800">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <div className="bg-emerald-50 border border-emerald-300 rounded p-2 text-[10px] font-mono text-emerald-950 space-y-1">
+                          <div className="flex items-center space-x-1 font-bold text-emerald-800">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
                             <span className="truncate">{uploadedDocs['signature'].filename}</span>
                           </div>
-                          <p className="text-[10px] text-emerald-900 border-t border-emerald-200 pt-1">
-                            Ready for 140x60 px grayscale &amp; &lt;= 20KB compression.
+                          <p className="text-[9px] text-emerald-900 border-t border-emerald-200 pt-1">
+                            Ready for 140x60 px &amp; &lt;= 20KB compression.
                           </p>
-                          <span className="text-[9px] text-blue-700 underline block pt-0.5">Click to replace signature</span>
+                          <span className="text-[8px] text-blue-700 underline block pt-0.5">Click to replace</span>
                         </div>
                       ) : (
-                        <div className="py-6 flex flex-col items-center justify-center text-xs font-mono text-gray-500 border border-dashed border-gray-200 rounded-lg bg-gray-50/50">
-                          <Upload className="w-6 h-6 text-gray-400 mb-1" />
-                          <span className="font-semibold text-gray-700">Drop Signature Scan</span>
-                          <span className="text-[10px] text-gray-400">JPG, PNG (Auto-sample fallback)</span>
+                        <div className="py-5 flex flex-col items-center justify-center text-xs font-mono text-gray-500 border border-dashed border-gray-200 rounded-lg bg-gray-50/50">
+                          <Upload className="w-5 h-5 text-gray-400 mb-1" />
+                          <span className="font-semibold text-gray-700 text-[11px]">Signature Scan</span>
+                          <span className="text-[9px] text-gray-400">Auto-crops from PAN</span>
                         </div>
                       )}
                     </div>
@@ -834,11 +886,17 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                   <div className="max-w-xl mx-auto bg-[#FAF8F5] border border-[#DFDBD2] rounded-lg p-5 text-left font-mono text-xs space-y-2">
                     <div className="flex justify-between border-b border-[#DFDBD2] pb-1.5">
                       <span className="text-gray-500">Applicant:</span>
-                      <strong className="text-[#111625]">Ramesh Kumar Sharma</strong>
+                      <strong className="text-[#111625]">{reconciliation?.name_reconciliation?.original_a || 'Citizen Applicant'}</strong>
                     </div>
                     <div className="flex justify-between border-b border-[#DFDBD2] pb-1.5">
                       <span className="text-gray-500">Service:</span>
-                      <strong className="text-[#162A45]">UP e-District (eSathi) Income &amp; Domicile</strong>
+                      <strong className="text-[#162A45]">
+                        {workflowTarget === 'national_scholarship'
+                          ? 'National Scholarship Portal (NSP 2.0)'
+                          : workflowTarget === 'epfo_joint_decl'
+                          ? 'EPFO Unified Portal Joint Declaration'
+                          : 'UP e-District (eSathi) Income & Domicile'}
+                      </strong>
                     </div>
                     <div className="flex justify-between border-b border-[#DFDBD2] pb-1.5">
                       <span className="text-gray-500">Attached Proof:</span>

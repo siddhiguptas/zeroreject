@@ -123,7 +123,11 @@ export const PhoneticGraphMatrix: React.FC<PhoneticGraphMatrixProps> = ({
               <div>Jaro-Winkler: <strong className="text-[#162A45]">{name_reconciliation.jaro_winkler_score}</strong></div>
               <div>Token-Sort: <strong className="text-[#162A45]">{name_reconciliation.token_sort_ratio}</strong></div>
               <div className="text-[10px] text-[#B86B11] font-semibold bg-amber-50 p-1 rounded border border-amber-200">
-                Initial: "K." expanded to "Kumar"
+                {name_reconciliation.initial_expansion_detected
+                  ? 'Initial: "K." expanded to "Kumar"'
+                  : name_reconciliation.jaro_winkler_score >= 0.95
+                  ? 'Exact Name Alignment Confirmed'
+                  : 'Phonetic cross-script match verified'}
               </div>
             </div>
           </div>
@@ -183,7 +187,7 @@ export const PhoneticGraphMatrix: React.FC<PhoneticGraphMatrixProps> = ({
               <div>PIN: <strong className="text-emerald-800">{postal_reconciliation.pincode}</strong></div>
               <div>Tehsil: <strong className="text-[#162A45]">{postal_reconciliation.taluka_or_subdistrict}</strong></div>
               <div className="text-[10px] text-gray-500 bg-[#F8F7F4] p-1 rounded">
-                Etawah, UP (0% district drift)
+                {postal_reconciliation.district || 'Deoria'}, {postal_reconciliation.state || 'UP'} (0% district drift)
               </div>
             </div>
           </div>

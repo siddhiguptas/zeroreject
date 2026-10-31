@@ -101,11 +101,13 @@ class PlaywrightBureaucracyAgent:
                 await page.wait_for_selector("#step2-form", timeout=10000)
 
                 # STEP 2: Address & Pincode
+                cur_pin = applicant_data.get("pincode", "206124")
+                cur_dist = applicant_data.get("district", "Jurisdiction")
                 yield {
                     "step_index": 2,
                     "step_name": "STEP2_ADDRESS_ENTRY",
                     "status": "RUNNING",
-                    "message": "Populating LGD-verified address hierarchy & PIN code 206124...",
+                    "message": f"Populating LGD-verified address hierarchy & PIN code {cur_pin} ({cur_dist})...",
                     "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
                 }
 

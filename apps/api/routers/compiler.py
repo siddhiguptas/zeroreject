@@ -48,16 +48,17 @@ async def compile_portal_assets(
     docs = docs_res.scalars().all()
     user_portrait = next((d for d in docs if d.doc_type == "portrait"), None)
     user_sig = next((d for d in docs if d.doc_type == "signature"), None)
-    aadhaar_doc = next((d for d in docs if d.doc_type == "aadhaar"), None)
+    aadhaar_front_doc = next((d for d in docs if d.doc_type in ["aadhaar_front", "aadhaar"]), None)
+    aadhaar_back_doc = next((d for d in docs if d.doc_type == "aadhaar_back"), None)
     pan_doc = next((d for d in docs if d.doc_type == "pan"), None)
 
     raw_portrait_path = (
         user_portrait.file_path if (user_portrait and os.path.exists(user_portrait.file_path))
-        else os.path.join(settings.SAMPLE_DOCS_DIR, "portrait_raw.jpg")
+        else (aadhaar_front_doc.file_path if (aadhaar_front_doc and os.path.exists(aadhaar_front_doc.file_path)) else os.path.join(settings.SAMPLE_DOCS_DIR, "portrait_raw.jpg"))
     )
     raw_sig_path = (
         user_sig.file_path if (user_sig and os.path.exists(user_sig.file_path))
-        else os.path.join(settings.SAMPLE_DOCS_DIR, "signature_raw.png")
+        else (pan_doc.file_path if (pan_doc and os.path.exists(pan_doc.file_path)) else os.path.join(settings.SAMPLE_DOCS_DIR, "signature_raw.png"))
     )
 
     # 1. Compile Portrait (CPU-bound OpenCV processing wrapped in non-blocking thread)
@@ -110,15 +111,18 @@ async def compile_portal_assets(
     recon_res = await db.execute(select(ReconciliationRecord).where(ReconciliationRecord.session_id == req.session_id))
     recon = recon_res.scalar_one_or_none()
 
-    app_name_aadhaar = recon.name_a if (recon and recon.name_a) else "Ramesh Kumar Sharma"
-    app_name_sec = recon.name_b if (recon and recon.name_b) else "RAMESH K SHARMA"
-    app_father = recon.father_a if (recon and recon.father_a) else "Dina Nath Sharma"
-    app_dob = recon.dob_a if (recon and recon.dob_a) else "14/08/1996"
-    app_pin = recon.pincode_query if (recon and recon.pincode_query) else "206124"
-    app_district = recon.district_verified if (recon and recon.district_verified) else "Etawah"
-    app_address = f"Vill. Bakewar, Dist. {app_district}, Uttar Pradesh - {app_pin}"
-    app_id_aadhaar = aadhaar_doc.id_number if (aadhaar_doc and aadhaar_doc.id_number) else "4892 7104 3829"
-    app_id_sec = pan_doc.id_number if (pan_doc and pan_doc.id_number) else "ABCPS1234F"
+    phonetic_matrix = recon.phonetic_matrix if recon else {}
+    postal_details = recon.postal_details if recon else {}
+
+    app_name_aadhaar = phonetic_matrix.get("original_a") or (aadhaar_front_doc.full_name if aadhaar_front_doc else "Ramesh Kumar Sharma")
+    app_name_sec = phonetic_matrix.get("original_b") or (pan_doc.full_name if pan_doc else "RAMESH K SHARMA")
+    app_father = phonetic_matrix.get("father_a") or (aadhaar_back_doc.father_or_spouse_name if aadhaar_back_doc else "Dina Nath Sharma")
+    app_dob = phonetic_matrix.get("dob_a") or (aadhaar_front_doc.dob if aadhaar_front_doc else "14/08/1996")
+    app_pin = postal_details.get("pincode") or (aadhaar_back_doc.pincode if aadhaar_back_doc else "206124")
+    app_district = postal_details.get("district") or "Etawah"
+    app_address = phonetic_matrix.get("address") or f"Dist. {app_district}, Uttar Pradesh - {app_pin}"
+    app_id_aadhaar = phonetic_matrix.get("aadhaar_num") or (aadhaar_back_doc.id_number if aadhaar_back_doc else (aadhaar_front_doc.id_number if aadhaar_front_doc else "4892 7104 3829"))
+    app_id_sec = phonetic_matrix.get("pan_num") or (pan_doc.id_number if pan_doc else "ABCPS1234F")
 
     # 3. Generate Bilingual Affidavit PDF (CPU-bound ReportLab synthesis wrapped in thread)
     affidavit_result = await asyncio.to_thread(

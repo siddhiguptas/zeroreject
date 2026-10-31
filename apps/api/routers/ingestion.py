@@ -250,28 +250,39 @@ async def execute_4gate_reconciliation(
     3. Gate 3: Statutory Rules & Revenue Expiry Verification (BM25 RAG).
     4. Gate 4: Live India Post LGD Postal & Tehsil Verification (api.postalpincode.in).
     """
-    aadhaar_doc = extracted_docs.get("aadhaar")
+    aadhaar_front_doc = extracted_docs.get("aadhaar_front") or extracted_docs.get("aadhaar")
+    aadhaar_back_doc = extracted_docs.get("aadhaar_back")
     pan_doc = extracted_docs.get("pan")
     marksheet_doc = extracted_docs.get("marksheet")
 
-    # Name extraction with intelligent multi-document fallback
-    name_a = (aadhaar_doc.full_name.strip() if (aadhaar_doc and aadhaar_doc.full_name and aadhaar_doc.full_name.strip()) else None)
+    # Name extraction: resolve Primary ID vs Secondary ID
+    name_a = (
+        (aadhaar_front_doc.full_name.strip() if (aadhaar_front_doc and aadhaar_front_doc.full_name and aadhaar_front_doc.full_name.strip()) else None)
+        or (marksheet_doc.full_name.strip() if (marksheet_doc and marksheet_doc.full_name and marksheet_doc.full_name.strip()) else None)
+    )
     name_b = (pan_doc.full_name.strip() if (pan_doc and pan_doc.full_name and pan_doc.full_name.strip()) else None)
-    name_c = (marksheet_doc.full_name.strip() if (marksheet_doc and marksheet_doc.full_name and marksheet_doc.full_name.strip()) else None)
 
     if not name_a and not name_b:
-        name_a = name_c or "Ramesh Kumar Sharma"
+        name_a = "Ramesh Kumar Sharma"
         name_b = "RAMESH K SHARMA"
     elif not name_a:
         name_a = name_b
     elif not name_b:
-        name_b = name_c or name_a
+        name_b = name_a
 
     # Cross-document name reconciliation (wrapped in thread)
     name_breakdown = await asyncio.to_thread(phonetic_reconciler.reconcile_names, name_a, name_b)
 
-    father_a = (aadhaar_doc.father_or_spouse_name.strip() if (aadhaar_doc and aadhaar_doc.father_or_spouse_name and aadhaar_doc.father_or_spouse_name.strip()) else None)
-    father_b = (pan_doc.father_or_spouse_name.strip() if (pan_doc and pan_doc.father_or_spouse_name and pan_doc.father_or_spouse_name.strip()) else None)
+    # Father / Guardian extraction from Aadhaar Back C/O or PAN Father line
+    father_a = (
+        (aadhaar_back_doc.father_or_spouse_name.strip() if (aadhaar_back_doc and aadhaar_back_doc.father_or_spouse_name and aadhaar_back_doc.father_or_spouse_name.strip()) else None)
+        or (aadhaar_front_doc.father_or_spouse_name.strip() if (aadhaar_front_doc and aadhaar_front_doc.father_or_spouse_name and aadhaar_front_doc.father_or_spouse_name.strip()) else None)
+        or (pan_doc.father_or_spouse_name.strip() if (pan_doc and pan_doc.father_or_spouse_name and pan_doc.father_or_spouse_name.strip()) else None)
+    )
+    father_b = (
+        (pan_doc.father_or_spouse_name.strip() if (pan_doc and pan_doc.father_or_spouse_name and pan_doc.father_or_spouse_name.strip()) else None)
+        or father_a
+    )
     if not father_a and not father_b:
         father_a = "Dina Nath Sharma"
         father_b = "DINA NATH SHARMA"
@@ -283,14 +294,28 @@ async def execute_4gate_reconciliation(
     father_breakdown = await asyncio.to_thread(phonetic_reconciler.reconcile_names, father_a, father_b)
 
     # DOB match
-    dob_a = (aadhaar_doc.dob if (aadhaar_doc and aadhaar_doc.dob) else (marksheet_doc.dob if marksheet_doc else "14/08/1996"))
+    dob_a = (
+        (aadhaar_front_doc.dob if (aadhaar_front_doc and aadhaar_front_doc.dob) else None)
+        or (marksheet_doc.dob if (marksheet_doc and marksheet_doc.dob) else None)
+        or (pan_doc.dob if (pan_doc and pan_doc.dob) else "14/08/1996")
+    )
     dob_b = (pan_doc.dob if (pan_doc and pan_doc.dob) else dob_a)
     dob_match = (dob_a == dob_b) if (dob_a and dob_b) else True
 
+    # Gender extraction
+    gender_detected = "MALE"
+    if aadhaar_front_doc and aadhaar_front_doc.gender:
+        gender_detected = aadhaar_front_doc.gender
+    elif pan_doc and pan_doc.gender:
+        gender_detected = pan_doc.gender
+    elif any("FEMALE" in ((d.extraction_details or {}).get("raw_text", "") if isinstance(d.extraction_details, dict) else "") for d in extracted_docs.values()):
+        gender_detected = "FEMALE"
+
     # Live India Post PIN Code verification
     pincode_query = (
-        aadhaar_doc.pincode if (aadhaar_doc and aadhaar_doc.pincode)
-        else (pan_doc.pincode if (pan_doc and pan_doc.pincode) else "206124")
+        (aadhaar_back_doc.pincode if (aadhaar_back_doc and aadhaar_back_doc.pincode) else None)
+        or (aadhaar_front_doc.pincode if (aadhaar_front_doc and aadhaar_front_doc.pincode) else None)
+        or (pan_doc.pincode if (pan_doc and pan_doc.pincode) else "206124")
     )
     postal_res = await phonetic_reconciler.validate_pincode_live(pincode_query)
 
@@ -316,7 +341,10 @@ async def execute_4gate_reconciliation(
             ])
 
     # Cryptographic Checksum & Optical QR Cross-Verification (Feature A)
-    aadhaar_num = aadhaar_doc.id_number if (aadhaar_doc and aadhaar_doc.id_number) else "4892 7104 3829"
+    aadhaar_num = (
+        (aadhaar_back_doc.id_number if (aadhaar_back_doc and aadhaar_back_doc.id_number) else None)
+        or (aadhaar_front_doc.id_number if (aadhaar_front_doc and aadhaar_front_doc.id_number) else "4892 7104 3829")
+    )
     pan_num = pan_doc.id_number if (pan_doc and pan_doc.id_number) else "ABCPS1234F"
     is_verhoeff_valid = qr_verifier.validate_verhoeff(aadhaar_num)
     pan_check = qr_verifier.validate_pan(pan_num)
@@ -376,6 +404,16 @@ async def execute_4gate_reconciliation(
     phonetic_matrix_dict["father_b"] = father_b
     phonetic_matrix_dict["dob_a"] = dob_a
     phonetic_matrix_dict["dob_b"] = dob_b
+    phonetic_matrix_dict["gender"] = gender_detected
+    phonetic_matrix_dict["aadhaar_num"] = aadhaar_num
+    phonetic_matrix_dict["pan_num"] = pan_num
+
+    address_query = (
+        (aadhaar_back_doc.address if (aadhaar_back_doc and aadhaar_back_doc.address) else None)
+        or (aadhaar_front_doc.address if (aadhaar_front_doc and aadhaar_front_doc.address) else None)
+        or f"C/O: {father_a}, Dist. {postal_res.district}, {postal_res.state} - {postal_res.pincode}"
+    )
+    phonetic_matrix_dict["address"] = address_query
 
     recon_record = ReconciliationRecord(
         session_id=session_id,
