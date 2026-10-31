@@ -2,8 +2,9 @@ import re
 import time
 from typing import Any
 
-from apps.api.core.audit_logger import audit_logger
 from rank_bm25 import BM25Okapi
+
+from apps.api.core.audit_logger import audit_logger
 
 # Real official statutory documents & guidelines seeded for civic governance
 STATUTORY_KNOWLEDGE_CORPUS: list[dict[str, Any]] = [

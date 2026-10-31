@@ -5,9 +5,10 @@ import time
 from collections.abc import AsyncGenerator
 from typing import Any
 
+from playwright.async_api import Browser, BrowserContext, Page, async_playwright
+
 from apps.api.core.audit_logger import audit_logger
 from apps.api.core.config import settings
-from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
 
 class PlaywrightBureaucracyAgent:
@@ -255,9 +256,28 @@ class PlaywrightBureaucracyAgent:
                 "screenshot_base64": shot_err,
                 "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             }
+            # Clean up browser resources immediately on fatal exception to prevent zombie processes
+            await self.cleanup_context(session_id)
         finally:
-            # Do not immediately close browser so citizen can submit OTP via session
+            # Context remains active exclusively when successfully reaching the AWAITING_OTP gate
             pass
+
+    async def cleanup_context(self, session_id: str) -> None:
+        """Deterministically close browser and stop Playwright to prevent zombie processes."""
+        ctx_data = self.active_contexts.pop(session_id, None)
+        if ctx_data:
+            browser = ctx_data.get("browser")
+            if browser:
+                try:
+                    await browser.close()
+                except Exception:
+                    pass
+            pw = ctx_data.get("playwright")
+            if pw:
+                try:
+                    await pw.stop()
+                except Exception:
+                    pass
 
     async def submit_otp_and_finalize(
         self,

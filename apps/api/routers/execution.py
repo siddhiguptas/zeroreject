@@ -2,15 +2,16 @@ import asyncio
 import json
 import time
 
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from apps.api.agents.playwright_executor import playwright_agent
 from apps.api.core.config import settings
 from apps.api.core.database import get_db
 from apps.api.models.entities import AuditSession
 from apps.api.schemas.contracts import FinalSubmissionReceipt, OTPAuthorizationRequest
-from fastapi import APIRouter, Depends, Query
-from fastapi.responses import StreamingResponse
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/execution", tags=["Playwright Self-Healing Agent & SSE Stream"])
 
@@ -50,16 +51,21 @@ async def stream_playwright_execution(
     }
 
     async def event_generator():
-        async for event in playwright_agent.execute_portal_workflow(
-            session_id=session_id,
-            target_url=target_url,
-            applicant_data=applicant_data,
-            asset_paths=asset_paths,
-            chaos_enabled=chaos_mode
-        ):
-            payload = json.dumps(event)
-            yield f"data: {payload}\n\n"
-            await asyncio.sleep(0.05)
+        try:
+            async for event in playwright_agent.execute_portal_workflow(
+                session_id=session_id,
+                target_url=target_url,
+                applicant_data=applicant_data,
+                asset_paths=asset_paths,
+                chaos_enabled=chaos_mode
+            ):
+                payload = json.dumps(event)
+                yield f"data: {payload}\n\n"
+                await asyncio.sleep(0.05)
+        except asyncio.CancelledError:
+            # Client disconnected early: terminate zombie browser context
+            await playwright_agent.cleanup_context(session_id)
+            raise
 
     return StreamingResponse(
         event_generator(),

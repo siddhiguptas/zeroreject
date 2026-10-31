@@ -63,6 +63,8 @@ class PostalValidationResult(BaseModel):
     post_offices: list[str]
     latency_ms: float
     is_cached: bool
+    source: str = "Live India Post API"
+    is_fallback: bool = False
 
 class ReconciliationResponse(BaseModel):
     session_id: str

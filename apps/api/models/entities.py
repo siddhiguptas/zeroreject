@@ -1,9 +1,10 @@
 import uuid
 from datetime import UTC, datetime
 
-from apps.api.core.database import Base
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from apps.api.core.database import Base
 
 
 def generate_uuid() -> str:

@@ -3,7 +3,8 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+BASE_DIR = PROJECT_ROOT
 
 class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
@@ -42,14 +43,15 @@ class Settings(BaseSettings):
     PLAYWRIGHT_SLOW_MO_MS: int = 150
     
     # Storage Dirs
-    STORAGE_DIR: str = str(BASE_DIR / "storage")
-    UPLOADS_DIR: str = str(BASE_DIR / "storage" / "uploads")
-    COMPILED_DIR: str = str(BASE_DIR / "storage" / "compiled")
-    AFFIDAVITS_DIR: str = str(BASE_DIR / "storage" / "affidavits")
-    SAMPLE_DOCS_DIR: str = str(BASE_DIR / "assets" / "real_sample_docs")
+    BASE_DIR: str = str(PROJECT_ROOT)
+    STORAGE_DIR: str = str(PROJECT_ROOT / "storage")
+    UPLOADS_DIR: str = str(PROJECT_ROOT / "storage" / "uploads")
+    COMPILED_DIR: str = str(PROJECT_ROOT / "storage" / "compiled")
+    AFFIDAVITS_DIR: str = str(PROJECT_ROOT / "storage" / "affidavits")
+    SAMPLE_DOCS_DIR: str = str(PROJECT_ROOT / "assets" / "real_sample_docs")
 
     model_config = SettingsConfigDict(
-        env_file=str(BASE_DIR / ".env"),
+        env_file=str(PROJECT_ROOT / ".env"),
         env_file_encoding="utf-8",
         extra="ignore"
     )

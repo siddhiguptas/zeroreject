@@ -1,7 +1,8 @@
 import os
 
-from apps.api.services.opencv_compiler import opencv_compiler
 from PIL import Image
+
+from apps.api.services.opencv_compiler import opencv_compiler
 
 
 def test_signature_compilation_and_byte_ceiling(tmp_path):

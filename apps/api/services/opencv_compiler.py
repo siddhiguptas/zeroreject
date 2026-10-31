@@ -5,9 +5,10 @@ from typing import Any
 
 import cv2
 import numpy as np
+from PIL import Image
+
 from apps.api.core.audit_logger import audit_logger
 from apps.api.core.config import settings
-from PIL import Image
 
 
 class OpenCVAssetCompiler:

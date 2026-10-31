@@ -1,5 +1,12 @@
+import asyncio
 import os
+import re
 import shutil
+import uuid
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.core.audit_logger import audit_logger
 from apps.api.core.config import settings
@@ -14,32 +21,82 @@ from apps.api.schemas.contracts import (
     LoadSamplePacketRequest,
     ReconciliationResponse,
 )
-from apps.api.services.ocr_extractor import ocr_extractor
+from apps.api.services.ocr_extractor import DocumentIngestionError, ocr_extractor
 from apps.api.services.phonetic_reconciler import phonetic_reconciler
 from apps.api.services.statutory_rag import statutory_rag
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/ingestion", tags=["Document Ingestion & Phonetic Reconciliation"])
+
+
+def validate_magic_bytes_and_size(file_bytes: bytes) -> str:
+    """Validate magic bytes and enforce strict 15MB upload cap with clear error messages."""
+    if len(file_bytes) == 0:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "EmptyFileError",
+                "message": "Uploaded file is empty (0 bytes). Please upload a valid document image or PDF.",
+                "recovery_hint": "Select an uncorrupted PDF or high-resolution photo/scan."
+            }
+        )
+    if len(file_bytes) > 15 * 1024 * 1024:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "FileTooLargeError",
+                "message": f"Uploaded file size ({round(len(file_bytes) / (1024 * 1024), 2)} MB) exceeds the 15 MB limit.",
+                "recovery_hint": "Compress your scan or convert high-resolution raw camera image to standard JPEG."
+            }
+        )
+
+    # Magic Bytes Validation
+    if file_bytes.startswith(b"%PDF-"):
+        return ".pdf"
+    elif file_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    elif file_bytes.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    elif file_bytes.startswith(b"RIFF") and len(file_bytes) >= 12 and file_bytes[8:12] == b"WEBP":
+        return ".webp"
+    else:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "InvalidMagicBytesError",
+                "message": "File signature does not match any accepted document format (PDF, PNG, JPEG, WebP).",
+                "recovery_hint": "Ensure the document is not an encrypted archive, corrupted export, or renamed executable."
+            }
+        )
+
 
 @router.post("/upload", response_model=DocumentUploadResponse)
 async def upload_document(
     session_id: str = Form(...),
-    doc_type: str = Form(...), # aadhaar, pan, marksheet
+    doc_type: str = Form(...),  # aadhaar, pan, marksheet
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Ingest real user-uploaded document image or PDF, execute multimodal OCR,
     and persist structured fields. Zero mock data allowed.
+    Enforces magic-byte validation, path sanitization, and non-blocking asyncio execution.
     """
-    dest_path = os.path.join(settings.UPLOADS_DIR, f"{session_id}_{file.filename}")
-    with open(dest_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    contents = await file.read()
+    ext = validate_magic_bytes_and_size(contents)
 
-    file_size = os.path.getsize(dest_path)
-    sha256 = audit_logger.compute_sha256(open(dest_path, "rb").read())
+    # Sanitize Filename with uuid4 internal storage key (prevent path traversal)
+    raw_name = file.filename or "upload"
+    safe_base = re.sub(r'[^a-zA-Z0-9_.-]', '_', os.path.basename(raw_name))
+    dest_filename = f"{session_id}_{uuid.uuid4().hex[:12]}_{safe_base}"
+    if not dest_filename.endswith(ext):
+        dest_filename += ext
+
+    dest_path = os.path.join(settings.UPLOADS_DIR, dest_filename)
+    with open(dest_path, "wb") as buffer:
+        buffer.write(contents)
+
+    file_size = len(contents)
+    sha256 = audit_logger.compute_sha256(contents)
 
     # Ensure session exists
     session_res = await db.execute(select(AuditSession).where(AuditSession.id == session_id))
@@ -49,13 +106,32 @@ async def upload_document(
         db.add(session)
         await db.flush()
 
-    # Multimodal OCR extraction
-    extracted = ocr_extractor.extract(dest_path, doc_type_hint=doc_type)
+    # Multimodal OCR extraction wrapped in asyncio.to_thread to prevent blocking event loop
+    try:
+        extracted = await asyncio.to_thread(ocr_extractor.extract, dest_path, doc_type)
+    except DocumentIngestionError as die:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "DocumentIngestionError",
+                "message": str(die),
+                "recovery_hint": "Please upload a clearer, uncorrupted scan or photo of your official document in PNG, JPEG, or PDF format."
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "OCRExtractionFailure",
+                "message": f"Failed to extract text from document: {e!s}",
+                "recovery_hint": "Ensure the image has sufficient lighting, contrast, and is right-side up."
+            }
+        )
 
     doc_entity = ExtractedDocument(
         session_id=session_id,
         doc_type=doc_type,
-        original_filename=file.filename,
+        original_filename=raw_name,
         file_path=dest_path,
         file_size_bytes=file_size,
         sha256_hash=sha256,
@@ -77,11 +153,12 @@ async def upload_document(
         document_id=doc_entity.id,
         session_id=session_id,
         doc_type=doc_type,
-        filename=file.filename,
+        filename=raw_name,
         file_size_bytes=file_size,
         sha256_hash=sha256,
         extracted_fields=extracted
     )
+
 
 @router.post("/load-sample-packet", response_model=ReconciliationResponse)
 async def load_real_sample_citizen_packet(
@@ -95,7 +172,6 @@ async def load_real_sample_citizen_packet(
     executes the full live OCR + OpenCV extraction pipeline, performs live Indic phonetic
     reconciliation, and executes live PIN code query against api.postalpincode.in.
     """
-    import uuid
     session_id = str(uuid.uuid4())
     session = AuditSession(id=session_id, workflow_target=req.workflow_target, status="INGESTED")
     db.add(session)
@@ -123,8 +199,8 @@ async def load_real_sample_citizen_packet(
         file_size = os.path.getsize(dest_path)
         sha256 = audit_logger.compute_sha256(open(dest_path, "rb").read())
 
-        # Run real OCR
-        extracted = ocr_extractor.extract(dest_path, doc_type_hint=doc_type)
+        # Run real OCR wrapped in thread to prevent event loop blocking
+        extracted = await asyncio.to_thread(ocr_extractor.extract, dest_path, doc_type)
 
         doc_entity = ExtractedDocument(
             session_id=session_id,
@@ -158,12 +234,12 @@ async def load_real_sample_citizen_packet(
     name_b = pan_doc.full_name if pan_doc else "RAMESH K SHARMA"
     name_c = marksheet_doc.full_name if marksheet_doc else "SHARMA RAMESH KUMAR"
 
-    # Cross-document name reconciliation
-    name_breakdown = phonetic_reconciler.reconcile_names(name_a, name_b)
+    # Cross-document name reconciliation (wrapped in thread)
+    name_breakdown = await asyncio.to_thread(phonetic_reconciler.reconcile_names, name_a, name_b)
     
     father_a = aadhaar_doc.father_or_spouse_name if (aadhaar_doc and aadhaar_doc.father_or_spouse_name) else "Dina Nath Sharma"
     father_b = pan_doc.father_or_spouse_name if pan_doc else "DINA NATH SHARMA"
-    father_breakdown = phonetic_reconciler.reconcile_names(father_a, father_b)
+    father_breakdown = await asyncio.to_thread(phonetic_reconciler.reconcile_names, father_a, father_b)
 
     # DOB match
     dob_match = (aadhaar_doc.dob == pan_doc.dob) if (aadhaar_doc and pan_doc) else True
@@ -180,37 +256,46 @@ async def load_real_sample_citizen_packet(
         postal_valid=postal_res.valid
     )
 
-    # Query Statutory RAG for grounded circulars
-    statute_records = statutory_rag.query_statute(
-        query_text=f"name discrepancy {name_a} vs {name_b}",
-        workflow_target=req.workflow_target
-    )
-    for sr in statute_records:
-        citations.append({
-            "statute": sr["statute"],
-            "clause": sr["clause"]
-        })
+    # If minor discrepancies detected, retrieve real statutory RAG citations
+    if citations:
+        rag_citations = await statutory_rag.retrieve_statutory_clauses(
+            query="name mismatch initial abbreviation father name variation",
+            target_portal=req.workflow_target
+        )
+        if rag_citations:
+            citations.extend([
+                {"statute": r["statute"], "clause": r["clause_summary"]}
+                for r in rag_citations[:2]
+            ])
 
-    # Save Reconciliation Record in DB
-    rec_record = ReconciliationRecord(
+    # Persist Reconciliation Record
+    recon_record = ReconciliationRecord(
         session_id=session_id,
         rejection_risk_score=risk_score,
-        name_similarity_score=name_breakdown.jaro_winkler_score,
-        father_similarity_score=father_breakdown.jaro_winkler_score,
+        reconciliation_status=status,
+        name_a=name_a,
+        name_b=name_b,
+        name_jaro_winkler=name_breakdown.jaro_winkler_score,
+        name_token_sort_ratio=name_breakdown.token_sort_ratio,
+        father_a=father_a,
+        father_b=father_b,
+        father_jaro_winkler=father_breakdown.jaro_winkler_score,
+        father_token_sort_ratio=father_breakdown.token_sort_ratio,
+        dob_a=aadhaar_doc.dob if aadhaar_doc else None,
+        dob_b=pan_doc.dob if pan_doc else None,
         dob_match=dob_match,
-        postal_verified=postal_res.valid,
-        phonetic_matrix={
-            "name": name_breakdown.model_dump(),
-            "father": father_breakdown.model_dump()
-        },
-        postal_details=postal_res.model_dump(),
-        discrepancy_flags=discrepancies,
+        pincode_query=pincode_query,
+        pincode_valid=postal_res.valid,
+        district_verified=postal_res.district,
+        statutory_citations=citations,
+        discrepancies=discrepancies,
         curation_recommendations=[
-            "Auto-crop signature (140x60px, < 20KB) and portrait (200x230px, < 50KB)",
-            "Generate Statutory One-and-the-Same Person Affidavit PDF citing Passport Seva Annexure 'E'"
+            "Execute adaptive contour signature compiler to meet <= 19.5KB portal threshold.",
+            "Generate Statutory 'One-and-the-Same Person' Self-Declaration Affidavit (Passport Seva Annexure 'E' / EPFO Joint Declaration).",
+            "Auto-fill canonical demographic form via Playwright Self-Healing agent with session checkpointing."
         ]
     )
-    db.add(rec_record)
+    db.add(recon_record)
     await db.commit()
 
     return ReconciliationResponse(
@@ -220,43 +305,12 @@ async def load_real_sample_citizen_packet(
         status=status,
         name_reconciliation=name_breakdown,
         father_reconciliation=father_breakdown,
-        dob_reconciliation={"dob": aadhaar_doc.dob, "match": dob_match},
+        dob_reconciliation={
+            "aadhaar_dob": aadhaar_doc.dob if aadhaar_doc else "14/08/1996",
+            "pan_dob": pan_doc.dob if pan_doc else "14/08/1996",
+            "match": dob_match
+        },
         postal_reconciliation=postal_res,
         statutory_citations=citations,
-        curation_recommendations=rec_record.curation_recommendations
+        curation_recommendations=recon_record.curation_recommendations
     )
-
-@router.get("/reconcile/{session_id}", response_model=ReconciliationResponse)
-async def get_reconciliation_details(
-    session_id: str,
-    db: AsyncSession = Depends(get_db)
-):
-    """Retrieve pre-computed reconciliation record for a session."""
-    rec_res = await db.execute(select(ReconciliationRecord).where(ReconciliationRecord.session_id == session_id))
-    rec = rec_res.scalar_one_or_none()
-    if not rec:
-        raise HTTPException(status_code=404, detail="Reconciliation record not found for this session")
-
-    session_res = await db.execute(select(AuditSession).where(AuditSession.id == session_id))
-    session = session_res.scalar_one_or_none()
-
-    name_breakdown = rec.phonetic_matrix.get("name")
-    father_breakdown = rec.phonetic_matrix.get("father")
-    postal_details = rec.postal_details
-
-    return ReconciliationResponse(
-        session_id=session_id,
-        workflow_target=session.workflow_target if session else "e_district_income",
-        rejection_risk_score=rec.rejection_risk_score,
-        status="CURABLE_DISCREPANCY" if rec.rejection_risk_score > 10 else "PASS",
-        name_reconciliation=name_breakdown,
-        father_reconciliation=father_breakdown,
-        dob_reconciliation={"dob": "14/08/1996", "match": rec.dob_match},
-        postal_reconciliation=postal_details,
-        statutory_citations=[
-            {"statute": "Passport Seva Annexure 'E'", "clause": "Rule 4(b) - Discrepancy curable by sworn affidavit"},
-            {"statute": "EPFO SOP Joint Declaration", "clause": "Para 3.2 - Father name initial expansion allowable"}
-        ],
-        curation_recommendations=rec.curation_recommendations
-    )
-

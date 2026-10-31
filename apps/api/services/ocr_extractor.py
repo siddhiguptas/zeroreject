@@ -6,10 +6,11 @@ from typing import Any
 import cv2
 import numpy as np
 import pytesseract
+from PIL import Image
+
 from apps.api.core.audit_logger import audit_logger
 from apps.api.core.config import settings
 from apps.api.schemas.contracts import ExtractedFieldData
-from PIL import Image
 
 # Set tesseract binary path if custom path exists
 if os.path.exists(settings.TESSERACT_CMD):
@@ -54,6 +55,11 @@ def validate_pan_structure(pan_str: str) -> bool:
     """Validate 10-char PAN structure (5 letters, 4 digits, 1 letter; 4th char 'P' for individual)."""
     clean = pan_str.strip().upper()
     return bool(re.match(r'^[A-Z]{5}[0-9]{4}[A-Z]$', clean))
+
+
+class DocumentIngestionError(Exception):
+    """Raised when an uploaded document cannot be decoded, is corrupted, or empty."""
+    pass
 
 
 class FreeMultimodalOCRExtractor:
@@ -103,10 +109,19 @@ class FreeMultimodalOCRExtractor:
         Stage 1: OpenCV Image Enhancement & Region-of-Interest (ROI) Segmentation.
         Applies CLAHE, bilateral filter, orientation deskew, and isolates photo/signature contours.
         """
-        img = cv2.imread(file_path)
-        if img is None:
-            pil_img = Image.open(file_path).convert("RGB")
-            img = np.array(pil_img)[:, :, ::-1]
+        if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+            raise DocumentIngestionError("Uploaded file is empty (0 bytes) or does not exist on disk.")
+
+        try:
+            img = cv2.imread(file_path)
+            if img is None:
+                pil_img = Image.open(file_path).convert("RGB")
+                img = np.array(pil_img)[:, :, ::-1]
+        except Exception as e:
+            raise DocumentIngestionError(f"Unable to decode document image ({e!s}). Please provide an uncorrupted PNG, JPEG, or PDF.")
+
+        if img is None or img.size == 0:
+            raise DocumentIngestionError("Decoded document contains no pixel data (0x0).")
 
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         h, w = gray.shape
@@ -161,7 +176,8 @@ class FreeMultimodalOCRExtractor:
 
     def _run_local_ocr(self, enhanced_img: np.ndarray) -> tuple[str, str]:
         """
-        Stage 2: Run Free Local CPU OCR via Pytesseract / OpenCV binarization.
+        Stage 2: Run Free Local CPU OCR via Pytesseract / OpenCV binarization
+        with automatic orientation detection and multi-angle retry (90°, 180°, 270°).
         """
         # Morphological Otsu binarization
         _, thresh = cv2.threshold(enhanced_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
@@ -177,6 +193,25 @@ class FreeMultimodalOCRExtractor:
             except Exception as e:
                 raw_text = f"Local OCR Error: {e}"
                 engine = "Fallback_Regex_Parser"
+
+        # Multi-Angle Orientation Retry for rotated or low-contrast scans
+        if len(raw_text.strip()) < 20:
+            for rot_code, angle_deg in [
+                (cv2.ROTATE_90_CLOCKWISE, "90deg"),
+                (cv2.ROTATE_180, "180deg"),
+                (cv2.ROTATE_90_COUNTERCLOCKWISE, "270deg")
+            ]:
+                rot_img = cv2.rotate(enhanced_img, rot_code)
+                _, rot_thresh = cv2.threshold(rot_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                try:
+                    cand_text = pytesseract.image_to_string(rot_thresh, config=custom_config)
+                    if len(cand_text.strip()) > len(raw_text.strip()):
+                        raw_text = cand_text
+                        engine = f"Pytesseract_MultiAngle_Retry_{angle_deg}"
+                        if len(raw_text.strip()) >= 30:
+                            break
+                except Exception:
+                    continue
 
         return raw_text, engine
 

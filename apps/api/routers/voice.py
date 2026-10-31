@@ -1,6 +1,7 @@
-from apps.api.services.voice_explainer import voice_explainer
 from fastapi import APIRouter
 from pydantic import BaseModel
+
+from apps.api.services.voice_explainer import voice_explainer
 
 router = APIRouter(prefix="/api/voice", tags=["100% Free Multilingual Voice Copilot"])
 

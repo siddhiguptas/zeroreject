@@ -3,6 +3,7 @@ import time
 from typing import Any
 
 import httpx
+
 from apps.api.core.audit_logger import audit_logger
 from apps.api.core.config import settings
 

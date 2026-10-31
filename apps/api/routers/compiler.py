@@ -1,4 +1,10 @@
+import asyncio
 import os
+
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.core.config import settings
 from apps.api.core.database import get_db
@@ -10,10 +16,6 @@ from apps.api.schemas.contracts import (
 )
 from apps.api.services.affidavit_generator import affidavit_generator
 from apps.api.services.opencv_compiler import opencv_compiler
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/api/compiler", tags=["OpenCV Asset Compiler & Affidavit Studio"])
 
@@ -37,8 +39,9 @@ async def compile_portal_assets(
     raw_portrait_path = os.path.join(settings.SAMPLE_DOCS_DIR, "portrait_raw.jpg")
     raw_sig_path = os.path.join(settings.SAMPLE_DOCS_DIR, "signature_raw.png")
 
-    # 1. Compile Portrait
-    portrait_result = opencv_compiler.compile_asset(
+    # 1. Compile Portrait (CPU-bound OpenCV processing wrapped in non-blocking thread)
+    portrait_result = await asyncio.to_thread(
+        opencv_compiler.compile_asset,
         input_path=raw_portrait_path,
         asset_type="portrait",
         session_id=req.session_id,
@@ -59,8 +62,9 @@ async def compile_portal_assets(
     )
     db.add(portrait_asset)
 
-    # 2. Compile Signature
-    sig_result = opencv_compiler.compile_asset(
+    # 2. Compile Signature (CPU-bound adaptive contouring wrapped in thread)
+    sig_result = await asyncio.to_thread(
+        opencv_compiler.compile_asset,
         input_path=raw_sig_path,
         asset_type="signature",
         session_id=req.session_id,
@@ -81,8 +85,9 @@ async def compile_portal_assets(
     )
     db.add(sig_asset)
 
-    # 3. Generate Bilingual Affidavit PDF
-    affidavit_result = affidavit_generator.generate_affidavit(
+    # 3. Generate Bilingual Affidavit PDF (CPU-bound ReportLab synthesis wrapped in thread)
+    affidavit_result = await asyncio.to_thread(
+        affidavit_generator.generate_affidavit,
         session_id=req.session_id,
         applicant_name_aadhaar="Ramesh Kumar Sharma",
         applicant_name_secondary="RAMESH K SHARMA",

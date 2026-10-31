@@ -2,8 +2,6 @@ import os
 import time
 from typing import Any
 
-from apps.api.core.audit_logger import audit_logger
-from apps.api.core.config import settings
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -15,6 +13,12 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
+from reportlab.platypus import (
+    Image as RLImage,
+)
+
+from apps.api.core.audit_logger import audit_logger
+from apps.api.core.config import settings
 
 
 class StatutoryAffidavitGenerator:
@@ -110,7 +114,14 @@ class StatutoryAffidavitGenerator:
 
         story = []
 
-        # Header Emblem & Title
+        # Header Sovereign Emblem & Title
+        seal_path = os.path.join(settings.BASE_DIR, "apps", "web", "public", "icon-192.png")
+        if os.path.exists(seal_path):
+            seal_img = RLImage(seal_path, width=38, height=38)
+            seal_img.hAlign = 'CENTER'
+            story.append(seal_img)
+            story.append(Spacer(1, 4))
+
         story.append(Paragraph("BEFORE THE STATUTORY COMPETENT AUTHORITY / PUBLIC GOVERNANCE PORTAL", title_style))
         story.append(Paragraph("FORM OF AFFIDAVIT / SELF-DECLARATION FOR RECONCILIATION OF NAME DISCREPANCY<br/>(Pursuant to Passport Seva Annexure 'E' & EPFO Joint Declaration SOP Para 3.2)", sub_title_style))
         story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor('#162A45'), spaceAfter=14))
