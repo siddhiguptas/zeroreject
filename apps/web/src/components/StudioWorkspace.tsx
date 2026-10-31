@@ -7,6 +7,7 @@ import { loadSamplePacket, compileAssets, askVoiceCopilot } from '@/lib/api-clie
 import { PhoneticGraphMatrix } from './PhoneticGraphMatrix';
 import { OpenCVCurePreview } from './OpenCVCurePreview';
 import { PlaywrightLiveConsole } from './PlaywrightLiveConsole';
+import { ErrorBoundary } from './ErrorBoundary';
 
 interface StudioWorkspaceProps {
   onPlaywrightStatusChange?: (status: 'READY' | 'EXECUTING' | 'HEALING' | 'PAUSED_OTP' | 'SUBMITTED') => void;
@@ -149,7 +150,8 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
       {/* Panel Contents */}
       <div className="bg-[#FAF8F5] border border-[#DFDBD2] rounded-xl p-6 shadow-sm">
         {activePanel === 'A' && (
-          <div className="space-y-6">
+          <ErrorBoundary panelName="Document Ingestion Studio">
+            <div className="space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#DFDBD2] pb-4">
               <div>
                 <h3 className="font-serif text-xl text-[#111625]">Panel A: Multi-Document Vision Ingestion</h3>
@@ -238,30 +240,37 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                 </button>
               </div>
             )}
-          </div>
+            </div>
+          </ErrorBoundary>
         )}
 
         {activePanel === 'B' && (
-          <PhoneticGraphMatrix
-            reconciliation={reconciliation}
-            loading={loadingPacket}
-          />
+          <ErrorBoundary panelName="Indic Phonetic Matrix">
+            <PhoneticGraphMatrix
+              reconciliation={reconciliation}
+              loading={loadingPacket}
+            />
+          </ErrorBoundary>
         )}
 
         {activePanel === 'C' && (
-          <OpenCVCurePreview
-            compileData={compileData}
-            loading={loadingCompile}
-            onTriggerCompile={handleTriggerCompile}
-            sessionId={sessionId}
-          />
+          <ErrorBoundary panelName="Adaptive OpenCV Asset Compiler">
+            <OpenCVCurePreview
+              compileData={compileData}
+              loading={loadingCompile}
+              onTriggerCompile={handleTriggerCompile}
+              sessionId={sessionId}
+            />
+          </ErrorBoundary>
         )}
 
         {activePanel === 'D' && (
-          <PlaywrightLiveConsole
-            sessionId={sessionId}
-            onExecutionStateChange={onPlaywrightStatusChange}
-          />
+          <ErrorBoundary panelName="Self-Healing Playwright Live Console">
+            <PlaywrightLiveConsole
+              sessionId={sessionId}
+              onExecutionStateChange={onPlaywrightStatusChange}
+            />
+          </ErrorBoundary>
         )}
       </div>
 

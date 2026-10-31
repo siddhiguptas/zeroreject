@@ -71,15 +71,18 @@ export default function HomePage() {
       {/* Sovereign Archival Footer */}
       <footer className="border-t border-[#DFDBD2] bg-[#EFECE4] py-8 px-4 text-xs font-mono text-[#525866]">
         <div className="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-4">
-          <div>
-            <span className="font-bold text-[#111625]">ZeroReject (PramaanFix)</span>
-            <span className="mx-2 text-[#DFDBD2]">|</span>
-            <span>FORGE '26 GenAI Hackathon (Track 1: Civic Pulse & Digital Governance)</span>
+          <div className="flex items-center space-x-3">
+            <img src="/logo-mark.svg" alt="ZeroReject Seal" className="w-6 h-6" />
+            <div>
+              <span className="font-bold text-[#111625]">ZeroReject (PramaanFix)</span>
+              <span className="mx-2 text-[#DFDBD2]">|</span>
+              <span>FORGE '26 GenAI Hackathon (Track 1: Civic Pulse &amp; Digital Governance)</span>
+            </div>
           </div>
-          <div className="space-x-4">
+          <div className="flex flex-wrap items-center gap-4">
             <span>Deterministic Math: Double Metaphone + Jaro-Winkler</span>
-            <span>Vision: Gemini 2.5 Flash + OpenCV</span>
-            <span>Autonomous Agent: LangGraph + Playwright</span>
+            <span>Vision: 100% Free OCR + OpenCV</span>
+            <span>Autonomous Agent: Playwright Self-Healing</span>
           </div>
         </div>
       </footer>

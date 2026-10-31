@@ -32,7 +32,8 @@ export const TelemetryRibbon: React.FC<TelemetryRibbonProps> = ({
       <div className="bg-[#111625] text-white border-b border-[#252C3D] px-4 py-2 text-xs font-mono">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           {/* Left: Brand Identity & Sovereign Seal */}
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2.5">
+            <img src="/logo-mark.svg" alt="ZeroReject Sovereign Seal" className="w-5 h-5 inline-block" />
             <span className="flex h-2 w-2 relative">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>

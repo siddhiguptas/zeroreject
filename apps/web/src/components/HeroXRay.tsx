@@ -51,9 +51,12 @@ export const HeroXRay: React.FC<HeroXRayProps> = ({ onScrollToStudio, onLaunchCh
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
         {/* Left Column: Authoritative Editorial Copy */}
         <div className="lg:col-span-7 space-y-6">
-          <div className="inline-flex items-center space-x-2 bg-[#EFECE4] border border-[#DFDBD2] px-3 py-1 rounded-full text-xs font-medium text-[#525866]">
-            <ShieldAlert className="w-3.5 h-3.5 text-[#C93B2B]" />
-            <span>Over 60% of Citizen Applications Fail Before Clerk Review</span>
+          <div className="flex items-center space-x-3">
+            <img src="/logo-mark.svg" alt="ZeroReject Seal" className="w-9 h-9 flex-shrink-0" />
+            <div className="inline-flex items-center space-x-2 bg-[#EFECE4] border border-[#DFDBD2] px-3 py-1 rounded-full text-xs font-medium text-[#525866]">
+              <ShieldAlert className="w-3.5 h-3.5 text-[#C93B2B]" />
+              <span>Over 60% of Citizen Applications Fail Before Clerk Review</span>
+            </div>
           </div>
 
           <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-normal tracking-tight text-[#111625] leading-[1.08]">

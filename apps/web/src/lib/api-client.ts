@@ -109,25 +109,50 @@ export function createExecutionEventSource(
   sessionId: string,
   chaosMode: boolean,
   onEvent: (event: ExecutionStepEvent) => void,
-  onError?: (err: any) => void
+  onError?: (err: any) => void,
+  autoReconnect: boolean = true
 ): () => void {
   const url = `${API_BASE}/api/execution/stream/${sessionId}?chaos_mode=${chaosMode}`;
-  const eventSource = new EventSource(url);
+  let eventSource: EventSource | null = null;
+  let retryCount = 0;
+  let isClosedManually = false;
+  const maxRetries = 3;
 
-  eventSource.onmessage = (e) => {
-    try {
-      const data: ExecutionStepEvent = JSON.parse(e.data);
-      onEvent(data);
-    } catch (err) {
-      console.error('Failed to parse SSE payload', err);
-    }
+  function connect() {
+    eventSource = new EventSource(url);
+
+    eventSource.onmessage = (e) => {
+      try {
+        const data: ExecutionStepEvent = JSON.parse(e.data);
+        onEvent(data);
+        retryCount = 0; // reset retry counter on healthy message
+      } catch (err) {
+        console.error('Failed to parse SSE payload', err);
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      if (isClosedManually) return;
+      if (autoReconnect && retryCount < maxRetries) {
+        retryCount++;
+        const backoffMs = Math.min(1000 * Math.pow(2, retryCount), 4000);
+        console.warn(`SSE stream disconnected. Reconnecting attempt ${retryCount}/${maxRetries} in ${backoffMs}ms...`);
+        eventSource?.close();
+        setTimeout(() => {
+          if (!isClosedManually) connect();
+        }, backoffMs);
+      } else {
+        if (onError) onError(err);
+        eventSource?.close();
+      }
+    };
+  }
+
+  connect();
+
+  return () => {
+    isClosedManually = true;
+    eventSource?.close();
   };
-
-  eventSource.onerror = (err) => {
-    if (onError) onError(err);
-    eventSource.close();
-  };
-
-  return () => eventSource.close();
 }
 
