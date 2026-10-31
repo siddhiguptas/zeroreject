@@ -26,10 +26,24 @@ next-env.d.ts
 *.sqlite-wal
 *.sqlite-shm
 *.db
+*.db-wal
+*.db-shm
 *.log
 storage/uploads/
 storage/compiled/
 storage/affidavits/
+
+# Internal Developer & Agent Tracking Files
+docs/AUDIT_REPORT.md
+docs/TASK_TRACKER.md
+docs/PLAN.md
+docs/*audit*
+docs/*task*
+docs/*plan*
+*.audit
+*.todo
+*.task
+scratch/
 
 # Environment Variables
 .env
