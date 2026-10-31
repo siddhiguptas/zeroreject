@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <style>
+      :root {
+        --bg-color: #0E1A2B;
+        --gold-color: #D4AF37;
+        --vermilion-color: #C93B2B;
+        --white-color: #F6F4EE;
+      }
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg-color: #162A45;
+        }
+      }
+    </style>
+  </defs>
+  <!-- Hexagon -->
+  <polygon points="32,4 58,18 58,46 32,60 6,46 6,18" fill="var(--bg-color)" stroke="var(--gold-color)" stroke-width="2.5" stroke-linejoin="round" />
+  
+  <!-- Document Fold -->
+  <path d="M 22 20 L 38 20 L 44 26 L 44 44 L 22 44 Z" fill="none" stroke="var(--white-color)" stroke-width="2" stroke-linejoin="round" />
+  <path d="M 38 20 L 38 26 L 44 26 Z" fill="var(--gold-color)" />
+  
+  <!-- Checkmark Badge -->
+  <circle cx="42" cy="42" r="9" fill="var(--vermilion-color)" stroke="var(--white-color)" stroke-width="1.5" />
+  <path d="M 38 42 L 41 45 L 46 39" fill="none" stroke="var(--white-color)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+</svg>

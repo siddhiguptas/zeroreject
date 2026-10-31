@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 200" width="800" height="200">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&amp;family=JetBrains+Mono:wght@500;700&amp;family=Inter:wght@400;500;600&amp;display=swap');
+      .title {
+        font-family: 'Cinzel', 'Times New Roman', Georgia, serif;
+        font-weight: 700;
+        font-size: 52px;
+        fill: #162A45;
+        letter-spacing: -0.5px;
+      }
+      .title-accent {
+        fill: #C93B2B;
+      }
+      .badge-bg {
+        fill: #0E1A2B;
+        rx: 4px;
+      }
+      .badge-text {
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 700;
+        font-size: 15px;
+        fill: #D4AF37;
+        letter-spacing: 2.5px;
+      }
+      .subtitle {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        font-weight: 500;
+        font-size: 14px;
+        fill: #64748B;
+        letter-spacing: 0.2px;
+      }
+      .border-line {
+        stroke: #E2DFD2;
+        stroke-width: 1px;
+      }
+    </style>
+  </defs>
+
+  <!-- Background subtle warm archival base -->
+  <rect width="800" height="200" fill="#FAF9F5" rx="12" />
+  <rect x="0.5" y="0.5" width="799" height="199" fill="none" stroke="#E2DFD2" rx="12" />
+
+  <!-- Sovereign Seal Component -->
+  <g transform="translate(35, 30.0)">
+    <g id="sovereign-seal" transform="translate(0, 0)">
+  <!-- Outer Guilloché Rim -->
+  <polygon points="123.3,39.2 123.3,100.8 70.0,131.6 16.7,100.8 16.7,39.2 70.0,8.4" fill="#0E1A2B" stroke="#D4AF37" stroke-width="1.68" stroke-linejoin="round" />
+  <polygon points="116.1,43.4 116.1,96.6 70.0,123.2 23.9,96.6 23.9,43.4 70.0,16.8" fill="#162A45" stroke="#C5A059" stroke-width="0.84" stroke-dasharray="2.1,1.4000000000000001" />
+  <polygon points="108.8,47.6 108.8,92.4 70.0,114.8 31.2,92.4 31.2,47.6 70.0,25.2" fill="#0E1A2B" />
+
+  <!-- Document Fold Geometry (Upper Right) -->
+  <path d="M 47.599999999999994 44.8
+           L 81.2 44.8
+           L 95.2 58.8
+           L 95.2 95.2
+           L 47.599999999999994 95.2 Z"
+        fill="none" stroke="#F6F4EE" stroke-width="2.52" stroke-linejoin="round" />
+  
+  <!-- Fold Corner Ear -->
+  <path d="M 81.2 44.8
+           L 81.2 58.8
+           L 95.2 58.8 Z"
+        fill="#D4AF37" stroke="#D4AF37" stroke-width="1.12" stroke-linejoin="round" />
+
+  <!-- Indic Phonetic Equivalence Wave (≈) -->
+  <path d="M 56.0 64.4
+           Q 63.0 60.2, 70.0 64.4
+           T 84.0 64.4"
+        fill="none" stroke="#C5A059" stroke-width="2.8000000000000003" stroke-linecap="round" />
+  <path d="M 56.0 72.8
+           Q 63.0 68.6, 70.0 72.8
+           T 84.0 72.8"
+        fill="none" stroke="#C5A059" stroke-width="2.8000000000000003" stroke-linecap="round" />
+
+  <!-- Vermilion Wax Seal Badge with Checkmark -->
+  <circle cx="86.8" cy="86.8" r="15.4" fill="#C93B2B" stroke="#F6F4EE" stroke-width="2.1" />
+  <path d="M 78.4 86.8
+           L 84.0 92.4
+           L 95.2 81.2"
+        fill="none" stroke="#F6F4EE" stroke-width="2.8000000000000003" stroke-linecap="round" stroke-linejoin="round" />
+</g>
+  </g>
+
+  <!-- Typography Block -->
+  <g transform="translate(195, 78)">
+    <text class="title" x="0" y="0">Zero<tspan class="title-accent">Reject</tspan></text>
+    
+    <!-- Monospace Hindi/Sanskrit Transliteration Badge -->
+    <rect class="badge-bg" x="325" y="-36" width="168" height="34" />
+    <text class="badge-text" x="337" y="-13">PRAMAAN·FIX</text>
+
+    <!-- Subtitle / Mission Tagline -->
+    <text class="subtitle" x="2" y="32">Autonomous Pre-Flight Cross-Document Mismatch Reconciler</text>
+    <text class="subtitle" x="2" y="52">&amp; Self-Healing Digital Bureaucracy Engine</text>
+  </g>
+
+  <!-- Gold Sovereign Accent Ribbon -->
+  <line x1="195" y1="145" x2="750" y2="145" stroke="#D4AF37" stroke-width="1.5" stroke-dasharray="6,4" opacity="0.6" />
+</svg>

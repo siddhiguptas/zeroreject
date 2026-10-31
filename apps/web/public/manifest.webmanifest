@@ -1,0 +1,29 @@
+{
+  "name": "ZeroReject (PramaanFix) — Sovereign Digital Governance Audit",
+  "short_name": "ZeroReject",
+  "description": "Pre-flight cross-document mismatch reconciler and self-healing bureaucracy agent.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F6F4EE",
+  "theme_color": "#162A45",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
