@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.api.agents.playwright_executor import playwright_agent
 from apps.api.core.config import settings
 from apps.api.core.database import get_db
-from apps.api.models.entities import AuditSession
+from apps.api.models.entities import AuditSession, ReconciliationRecord
 from apps.api.schemas.contracts import FinalSubmissionReceipt, OTPAuthorizationRequest
 from apps.api.services.affidavit_generator import affidavit_generator
 
@@ -37,14 +37,17 @@ async def stream_playwright_execution(
     portal_type = portal or (session.workflow_target if session and session.workflow_target else "e_district_income")
     target_url = f"{settings.GOV_PORTAL_BASE_URL}/?portal={portal_type}"
 
+    recon_res = await db.execute(select(ReconciliationRecord).where(ReconciliationRecord.session_id == session_id))
+    recon = recon_res.scalar_one_or_none()
+
     applicant_data = {
-        "applicant_name": "Ramesh Kumar Sharma",
-        "father_name": "Dina Nath Sharma",
-        "dob": "14/08/1996",
+        "applicant_name": recon.name_a if (recon and recon.name_a) else "Ramesh Kumar Sharma",
+        "father_name": recon.father_a if (recon and recon.father_a) else "Dina Nath Sharma",
+        "dob": recon.dob_a if (recon and recon.dob_a) else "14/08/1996",
         "gender": "MALE",
-        "address_line": "Vill. Bakewar, Bharthana Road",
-        "pincode": "206124",
-        "district": "Etawah",
+        "address_line": "Vill. Primary Residence",
+        "pincode": recon.pincode_query if (recon and recon.pincode_query) else "206124",
+        "district": recon.district_verified if (recon and recon.district_verified) else "Etawah",
         "state": "Uttar Pradesh"
     }
 

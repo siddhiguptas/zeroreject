@@ -1,9 +1,34 @@
 'use client';
 
-import React, { useState } from 'react';
-import { FileText, CheckCircle2, Wand2, Check, ArrowRight, Lock, ExternalLink, Download, ShieldCheck, AlertTriangle, Play, RotateCcw } from 'lucide-react';
-import { ReconciliationResponse, CompileAssetsResponse } from '@/types';
-import { loadSamplePacket, compileAssets, authorizeOtp, getReceiptPdfUrl } from '@/lib/api-client';
+import React, { useState, useRef } from 'react';
+import {
+  FileText,
+  CheckCircle2,
+  Wand2,
+  Check,
+  ArrowRight,
+  Lock,
+  ExternalLink,
+  Download,
+  ShieldCheck,
+  AlertTriangle,
+  Play,
+  RotateCcw,
+  Upload,
+  Loader2,
+  Sparkles,
+  AlertCircle,
+  FileUp,
+} from 'lucide-react';
+import { ReconciliationResponse, CompileAssetsResponse, DocumentUploadResponse } from '@/types';
+import {
+  loadSamplePacket,
+  uploadDocument,
+  reconcileSession,
+  compileAssets,
+  authorizeOtp,
+  getReceiptPdfUrl,
+} from '@/lib/api-client';
 import { PhoneticGraphMatrix } from './PhoneticGraphMatrix';
 import { OpenCVCurePreview } from './OpenCVCurePreview';
 import { PlaywrightLiveConsole } from './PlaywrightLiveConsole';
@@ -27,6 +52,57 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
   const [otpCode, setOtpCode] = useState('719340');
   const [receiptAck, setReceiptAck] = useState<string | null>(null);
   const [isSubmittingOtp, setIsSubmittingOtp] = useState(false);
+
+  // Custom Document Upload State
+  const [intakeMode, setIntakeMode] = useState<'upload' | 'sample'>('upload');
+  const [uploadedDocs, setUploadedDocs] = useState<Record<string, DocumentUploadResponse>>({});
+  const [uploadingDocType, setUploadingDocType] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isReconcilingUploads, setIsReconcilingUploads] = useState(false);
+
+  // File Input Refs for Custom Document Upload
+  const aadhaarInputRef = useRef<HTMLInputElement | null>(null);
+  const panInputRef = useRef<HTMLInputElement | null>(null);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const sigInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleFileUpload = async (docType: string, file: File) => {
+    setUploadError(null);
+    setUploadingDocType(docType);
+
+    let currentSessionId = sessionId;
+    if (!currentSessionId) {
+      currentSessionId = 'sess_' + Math.random().toString(36).substring(2, 10);
+      setSessionId(currentSessionId);
+    }
+
+    try {
+      const res = await uploadDocument(currentSessionId, docType, file);
+      setUploadedDocs(prev => ({ ...prev, [docType]: res }));
+    } catch (err: any) {
+      setUploadError(err?.message || `Failed to upload and extract ${docType}`);
+    } finally {
+      setUploadingDocType(null);
+    }
+  };
+
+  const handleReconcileUploadedSession = async () => {
+    if (!sessionId) {
+      setUploadError('Please upload at least one document before running audit.');
+      return;
+    }
+    setIsReconcilingUploads(true);
+    setUploadError(null);
+    try {
+      const data = await reconcileSession(sessionId, workflowTarget);
+      setReconciliation(data);
+      setActiveStep(2); // Automatically advance to Step 2: 4-Gate Lekhpal Audit
+    } catch (err: any) {
+      setUploadError(err?.message || 'Failed to reconcile uploaded documents');
+    } finally {
+      setIsReconcilingUploads(false);
+    }
+  };
 
   // 1-Click Evaluation Packet Loader (Feeds real rasterized document images into live pipeline)
   const handleLoadSamplePacket = async () => {
@@ -246,85 +322,370 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                   </p>
                 </div>
 
-                {/* 1-Click Evaluation Packet Loader */}
-                <button
-                  onClick={handleLoadSamplePacket}
-                  disabled={loadingPacket}
-                  className="flex items-center space-x-2 bg-[#162A45] hover:bg-[#1f3a5e] text-white px-5 py-2.5 rounded-lg text-xs font-semibold shadow-archival transition-all"
-                >
-                  <Wand2 className="w-4 h-4 text-amber-300" />
-                  <span>{loadingPacket ? 'Processing Optical Pipeline...' : '⚡ Load Real Citizen Packet (Etawah, UP — PIN 206124)'}</span>
-                </button>
-              </div>
-
-              {/* Ingestion Matrix Cards with Raw File Sizes & Script Badges */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Card 1: Aadhaar */}
-                <div className="bg-white border border-[#DFDBD2] rounded-lg p-5 space-y-3 shadow-sm">
-                  <div className="flex justify-between items-center text-xs font-mono font-semibold">
-                    <span className="text-[#162A45]">Primary Identity: Aadhaar</span>
-                    <span className="text-[10px] bg-blue-50 text-blue-800 px-2 py-0.5 rounded font-bold">UIDAI Standard</span>
-                  </div>
-                  <div className="h-32 bg-[#F8F7F4] border border-dashed border-[#DFDBD2] rounded flex flex-col items-center justify-center text-center p-3 text-xs text-[#525866]">
-                    <FileText className="w-8 h-8 text-[#162A45] mb-1" />
-                    <span className="font-medium text-[#111625]">aadhaar_sample.png</span>
-                    <span className="text-[10px] font-mono text-amber-800 bg-amber-50 px-2 py-0.5 rounded mt-1">
-                      Raw Scan: 482 KB — Exceeds 50 KB Portal Limit ⚠️
-                    </span>
-                  </div>
-                  <div className="text-[11px] font-mono text-gray-600 space-y-0.5">
-                    <div className="font-semibold text-gray-900">रमेश कुमार शर्मा / Ramesh Kumar Sharma</div>
-                    <div>DOB: 14/08/1996 | PIN: 206124 (Etawah)</div>
-                    <span className="inline-block bg-blue-50 text-blue-900 text-[10px] px-1.5 py-0.2 rounded font-bold">
-                      Script: Devanagari + Latin
-                    </span>
-                  </div>
-                </div>
-
-                {/* Card 2: PAN Card */}
-                <div className="bg-white border border-[#DFDBD2] rounded-lg p-5 space-y-3 shadow-sm">
-                  <div className="flex justify-between items-center text-xs font-mono font-semibold">
-                    <span className="text-[#162A45]">Secondary Identity: PAN</span>
-                    <span className="text-[10px] bg-amber-50 text-amber-900 px-2 py-0.5 rounded font-bold">Initial Trap</span>
-                  </div>
-                  <div className="h-32 bg-[#F8F7F4] border border-dashed border-[#DFDBD2] rounded flex flex-col items-center justify-center text-center p-3 text-xs text-[#525866]">
-                    <FileText className="w-8 h-8 text-[#C93B2B] mb-1" />
-                    <span className="font-medium text-[#111625]">pan_sample.png</span>
-                    <span className="text-[10px] font-mono text-amber-800 bg-amber-50 px-2 py-0.5 rounded mt-1">
-                      Raw Scan: 312 KB — Exceeds 20 KB Signature Limit ⚠️
-                    </span>
-                  </div>
-                  <div className="text-[11px] font-mono text-gray-600 space-y-0.5">
-                    <div className="font-semibold text-[#C93B2B]">RAMESH K SHARMA (Initial Mismatch)</div>
-                    <div>Father: DINA NATH SHARMA | PAN: ABCPS1234F</div>
-                    <span className="inline-block bg-amber-50 text-amber-900 text-[10px] px-1.5 py-0.2 rounded font-bold">
-                      Script: Latin (All-Caps)
-                    </span>
-                  </div>
-                </div>
-
-                {/* Card 3: 10th Marksheet */}
-                <div className="bg-white border border-[#DFDBD2] rounded-lg p-5 space-y-3 shadow-sm">
-                  <div className="flex justify-between items-center text-xs font-mono font-semibold">
-                    <span className="text-[#162A45]">DOB Proof: 10th Marksheet</span>
-                    <span className="text-[10px] bg-red-50 text-red-900 px-2 py-0.5 rounded font-bold">Inversion Trap</span>
-                  </div>
-                  <div className="h-32 bg-[#F8F7F4] border border-dashed border-[#DFDBD2] rounded flex flex-col items-center justify-center text-center p-3 text-xs text-[#525866]">
-                    <FileText className="w-8 h-8 text-[#B86B11] mb-1" />
-                    <span className="font-medium text-[#111625]">marksheet_sample.png</span>
-                    <span className="text-[10px] font-mono text-amber-800 bg-amber-50 px-2 py-0.5 rounded mt-1">
-                      Raw Scan: 840 KB — Exceeds 100 KB PDF Limit ⚠️
-                    </span>
-                  </div>
-                  <div className="text-[11px] font-mono text-gray-600 space-y-0.5">
-                    <div className="font-semibold text-[#B86B11]">SHARMA RAMESH KUMAR (Inversion)</div>
-                    <div>Father: D. N. SHARMA | Result: 1st Div</div>
-                    <span className="inline-block bg-purple-50 text-purple-900 text-[10px] px-1.5 py-0.2 rounded font-bold">
-                      DOB Authenticated Proof
-                    </span>
-                  </div>
+                {/* Session telemetry badge */}
+                <div className="flex items-center space-x-2 bg-white px-3 py-1.5 rounded-lg border border-[#DFDBD2] text-xs font-mono">
+                  <span className="text-gray-500">Session Docket:</span>
+                  <strong className="text-[#162A45]">{sessionId ? sessionId.slice(0, 16) : 'Unassigned (Auto-Gen on Intake)'}</strong>
                 </div>
               </div>
+
+              {/* Intake Mode Switcher */}
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-[#EFECE4] p-1.5 rounded-xl border border-[#DFDBD2]">
+                <div className="flex space-x-1">
+                  <button
+                    onClick={() => setIntakeMode('upload')}
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-mono font-semibold transition-all ${
+                      intakeMode === 'upload'
+                        ? 'bg-[#162A45] text-white shadow-sm'
+                        : 'text-[#525866] hover:text-[#111625] hover:bg-white/50'
+                    }`}
+                  >
+                    <Upload className="w-3.5 h-3.5 text-amber-300" />
+                    <span>📁 Upload Custom Documents (Live Sandbox)</span>
+                  </button>
+                  <button
+                    onClick={() => setIntakeMode('sample')}
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-mono font-semibold transition-all ${
+                      intakeMode === 'sample'
+                        ? 'bg-[#162A45] text-white shadow-sm'
+                        : 'text-[#525866] hover:text-[#111625] hover:bg-white/50'
+                    }`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-blue-300" />
+                    <span>⚡ 1-Click Evaluation Packet (Sample Scans)</span>
+                  </button>
+                </div>
+
+                {intakeMode === 'sample' && (
+                  <button
+                    onClick={handleLoadSamplePacket}
+                    disabled={loadingPacket}
+                    className="flex items-center space-x-2 bg-[#162A45] hover:bg-[#1f3a5e] text-white px-4 py-2 rounded-lg text-xs font-semibold shadow-sm transition-all"
+                  >
+                    <Wand2 className="w-3.5 h-3.5 text-amber-300" />
+                    <span>{loadingPacket ? 'Processing Optical Pipeline...' : '⚡ Load Real Citizen Packet (Etawah, UP — PIN 206124)'}</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Upload Error Banner if any */}
+              {uploadError && (
+                <div className="bg-red-50 border border-red-300 text-red-900 p-3 rounded-lg flex items-center space-x-2 text-xs font-mono">
+                  <AlertCircle className="w-4 h-4 text-red-700 shrink-0" />
+                  <span>{uploadError}</span>
+                </div>
+              )}
+
+              {/* MODE A: CUSTOM DOCUMENT UPLOAD GRID */}
+              {intakeMode === 'upload' && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* 1. Primary ID (Aadhaar / Voter ID / Passport) */}
+                    <div
+                      onClick={() => aadhaarInputRef.current?.click()}
+                      className={`bg-white border-2 border-dashed rounded-xl p-4 cursor-pointer transition-all hover:border-[#162A45] shadow-sm flex flex-col justify-between ${
+                        uploadedDocs['aadhaar'] ? 'border-emerald-500 bg-emerald-50/20' : 'border-[#DFDBD2]'
+                      }`}
+                    >
+                      <input
+                        type="file"
+                        ref={aadhaarInputRef}
+                        onChange={(e) => e.target.files?.[0] && handleFileUpload('aadhaar', e.target.files[0])}
+                        accept="image/*,.pdf"
+                        className="hidden"
+                      />
+                      <div>
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-xs font-mono font-bold text-[#162A45]">Primary Identity *</span>
+                          <span className="text-[10px] bg-blue-50 text-blue-800 px-1.5 py-0.5 rounded font-mono font-bold">Aadhaar/Passport</span>
+                        </div>
+                        <p className="text-[11px] text-[#525866] mb-3">
+                          Upload Aadhaar, Passport or Voter ID scan for UIDAI Verhoeff validation.
+                        </p>
+                      </div>
+
+                      {uploadingDocType === 'aadhaar' ? (
+                        <div className="py-6 flex flex-col items-center justify-center text-xs font-mono text-[#162A45] space-y-2">
+                          <Loader2 className="w-6 h-6 animate-spin text-[#162A45]" />
+                          <span>Executing OCR &amp; Checksums...</span>
+                        </div>
+                      ) : uploadedDocs['aadhaar'] ? (
+                        <div className="bg-emerald-50 border border-emerald-300 rounded p-2.5 text-[11px] font-mono text-emerald-950 space-y-1">
+                          <div className="flex items-center space-x-1.5 font-bold text-emerald-800">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span className="truncate">{uploadedDocs['aadhaar'].filename}</span>
+                          </div>
+                          <div className="text-[10px] text-emerald-900 border-t border-emerald-200 pt-1">
+                            <div>Name: <strong>{uploadedDocs['aadhaar'].extracted_fields.full_name || 'Detected in Scan'}</strong></div>
+                            <div>ID: <strong>{uploadedDocs['aadhaar'].extracted_fields.id_number || 'UIDAI Matched'}</strong></div>
+                            <div>PIN: <strong>{uploadedDocs['aadhaar'].extracted_fields.pincode || 'Extracted'}</strong></div>
+                          </div>
+                          <span className="text-[9px] text-blue-700 underline block pt-0.5">Click to replace file</span>
+                        </div>
+                      ) : (
+                        <div className="py-6 flex flex-col items-center justify-center text-xs font-mono text-gray-500 border border-dashed border-gray-200 rounded-lg bg-gray-50/50">
+                          <FileUp className="w-6 h-6 text-gray-400 mb-1" />
+                          <span className="font-semibold text-gray-700">Drop Aadhaar / ID Scan</span>
+                          <span className="text-[10px] text-gray-400">PNG, JPG, PDF (Max 15MB)</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 2. Secondary ID (PAN / Marksheet) */}
+                    <div
+                      onClick={() => panInputRef.current?.click()}
+                      className={`bg-white border-2 border-dashed rounded-xl p-4 cursor-pointer transition-all hover:border-[#162A45] shadow-sm flex flex-col justify-between ${
+                        uploadedDocs['pan'] ? 'border-emerald-500 bg-emerald-50/20' : 'border-[#DFDBD2]'
+                      }`}
+                    >
+                      <input
+                        type="file"
+                        ref={panInputRef}
+                        onChange={(e) => e.target.files?.[0] && handleFileUpload('pan', e.target.files[0])}
+                        accept="image/*,.pdf"
+                        className="hidden"
+                      />
+                      <div>
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-xs font-mono font-bold text-[#162A45]">Secondary Identity *</span>
+                          <span className="text-[10px] bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded font-mono font-bold">PAN / Marksheet</span>
+                        </div>
+                        <p className="text-[11px] text-[#525866] mb-3">
+                          Upload PAN Card or 10th Marksheet to test phonetic cross-referencing.
+                        </p>
+                      </div>
+
+                      {uploadingDocType === 'pan' ? (
+                        <div className="py-6 flex flex-col items-center justify-center text-xs font-mono text-[#162A45] space-y-2">
+                          <Loader2 className="w-6 h-6 animate-spin text-[#162A45]" />
+                          <span>Parsing PAN / Marksheet...</span>
+                        </div>
+                      ) : uploadedDocs['pan'] ? (
+                        <div className="bg-emerald-50 border border-emerald-300 rounded p-2.5 text-[11px] font-mono text-emerald-950 space-y-1">
+                          <div className="flex items-center space-x-1.5 font-bold text-emerald-800">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span className="truncate">{uploadedDocs['pan'].filename}</span>
+                          </div>
+                          <div className="text-[10px] text-emerald-900 border-t border-emerald-200 pt-1">
+                            <div>Name: <strong>{uploadedDocs['pan'].extracted_fields.full_name || 'Detected in Scan'}</strong></div>
+                            <div>ID: <strong>{uploadedDocs['pan'].extracted_fields.id_number || 'PAN Matched'}</strong></div>
+                            <div>DOB: <strong>{uploadedDocs['pan'].extracted_fields.dob || 'Extracted'}</strong></div>
+                          </div>
+                          <span className="text-[9px] text-blue-700 underline block pt-0.5">Click to replace file</span>
+                        </div>
+                      ) : (
+                        <div className="py-6 flex flex-col items-center justify-center text-xs font-mono text-gray-500 border border-dashed border-gray-200 rounded-lg bg-gray-50/50">
+                          <FileUp className="w-6 h-6 text-gray-400 mb-1" />
+                          <span className="font-semibold text-gray-700">Drop PAN or Marksheet</span>
+                          <span className="text-[10px] text-gray-400">PNG, JPG, PDF (Max 15MB)</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 3. Portrait Photo (Optional) */}
+                    <div
+                      onClick={() => photoInputRef.current?.click()}
+                      className={`bg-white border-2 border-dashed rounded-xl p-4 cursor-pointer transition-all hover:border-[#162A45] shadow-sm flex flex-col justify-between ${
+                        uploadedDocs['portrait'] ? 'border-emerald-500 bg-emerald-50/20' : 'border-[#DFDBD2]'
+                      }`}
+                    >
+                      <input
+                        type="file"
+                        ref={photoInputRef}
+                        onChange={(e) => e.target.files?.[0] && handleFileUpload('portrait', e.target.files[0])}
+                        accept="image/*"
+                        className="hidden"
+                      />
+                      <div>
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-xs font-mono font-bold text-[#162A45]">Citizen Photo</span>
+                          <span className="text-[10px] bg-purple-50 text-purple-800 px-1.5 py-0.5 rounded font-mono font-bold">Optional</span>
+                        </div>
+                        <p className="text-[11px] text-[#525866] mb-3">
+                          Upload citizen passport photograph for OpenCV 200x230 px curing.
+                        </p>
+                      </div>
+
+                      {uploadingDocType === 'portrait' ? (
+                        <div className="py-6 flex flex-col items-center justify-center text-xs font-mono text-[#162A45] space-y-2">
+                          <Loader2 className="w-6 h-6 animate-spin text-[#162A45]" />
+                          <span>Processing Photo...</span>
+                        </div>
+                      ) : uploadedDocs['portrait'] ? (
+                        <div className="bg-emerald-50 border border-emerald-300 rounded p-2.5 text-[11px] font-mono text-emerald-950 space-y-1">
+                          <div className="flex items-center space-x-1.5 font-bold text-emerald-800">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span className="truncate">{uploadedDocs['portrait'].filename}</span>
+                          </div>
+                          <p className="text-[10px] text-emerald-900 border-t border-emerald-200 pt-1">
+                            Ready for Lanczos crop &amp; &lt;= 50KB compression in Step 3.
+                          </p>
+                          <span className="text-[9px] text-blue-700 underline block pt-0.5">Click to replace photo</span>
+                        </div>
+                      ) : (
+                        <div className="py-6 flex flex-col items-center justify-center text-xs font-mono text-gray-500 border border-dashed border-gray-200 rounded-lg bg-gray-50/50">
+                          <Upload className="w-6 h-6 text-gray-400 mb-1" />
+                          <span className="font-semibold text-gray-700">Drop Portrait Photo</span>
+                          <span className="text-[10px] text-gray-400">JPG, PNG (Auto-sample fallback)</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 4. Signature (Optional) */}
+                    <div
+                      onClick={() => sigInputRef.current?.click()}
+                      className={`bg-white border-2 border-dashed rounded-xl p-4 cursor-pointer transition-all hover:border-[#162A45] shadow-sm flex flex-col justify-between ${
+                        uploadedDocs['signature'] ? 'border-emerald-500 bg-emerald-50/20' : 'border-[#DFDBD2]'
+                      }`}
+                    >
+                      <input
+                        type="file"
+                        ref={sigInputRef}
+                        onChange={(e) => e.target.files?.[0] && handleFileUpload('signature', e.target.files[0])}
+                        accept="image/*"
+                        className="hidden"
+                      />
+                      <div>
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-xs font-mono font-bold text-[#162A45]">Handwritten Signature</span>
+                          <span className="text-[10px] bg-purple-50 text-purple-800 px-1.5 py-0.5 rounded font-mono font-bold">Optional</span>
+                        </div>
+                        <p className="text-[11px] text-[#525866] mb-3">
+                          Upload handwritten signature scan for adaptive contour extraction.
+                        </p>
+                      </div>
+
+                      {uploadingDocType === 'signature' ? (
+                        <div className="py-6 flex flex-col items-center justify-center text-xs font-mono text-[#162A45] space-y-2">
+                          <Loader2 className="w-6 h-6 animate-spin text-[#162A45]" />
+                          <span>Processing Signature...</span>
+                        </div>
+                      ) : uploadedDocs['signature'] ? (
+                        <div className="bg-emerald-50 border border-emerald-300 rounded p-2.5 text-[11px] font-mono text-emerald-950 space-y-1">
+                          <div className="flex items-center space-x-1.5 font-bold text-emerald-800">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span className="truncate">{uploadedDocs['signature'].filename}</span>
+                          </div>
+                          <p className="text-[10px] text-emerald-900 border-t border-emerald-200 pt-1">
+                            Ready for 140x60 px grayscale &amp; &lt;= 20KB compression.
+                          </p>
+                          <span className="text-[9px] text-blue-700 underline block pt-0.5">Click to replace signature</span>
+                        </div>
+                      ) : (
+                        <div className="py-6 flex flex-col items-center justify-center text-xs font-mono text-gray-500 border border-dashed border-gray-200 rounded-lg bg-gray-50/50">
+                          <Upload className="w-6 h-6 text-gray-400 mb-1" />
+                          <span className="font-semibold text-gray-700">Drop Signature Scan</span>
+                          <span className="text-[10px] text-gray-400">JPG, PNG (Auto-sample fallback)</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Reconcile Uploaded Files Action CTA */}
+                  {Object.keys(uploadedDocs).length > 0 && (
+                    <div className="bg-white border border-[#DFDBD2] p-5 rounded-xl flex flex-wrap items-center justify-between gap-4 shadow-sm">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center space-x-2 text-xs font-mono font-bold text-gray-900">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          <span>{Object.keys(uploadedDocs).length} Custom Document(s) Extracted &amp; Ready for Virtual Lekhpal Audit</span>
+                        </div>
+                        <p className="text-[11px] text-gray-500 font-mono">
+                          Session: <strong>{sessionId}</strong> | Next: Cross-script phonetic graph, Verhoeff D5 check &amp; India Post PIN lookup.
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={handleReconcileUploadedSession}
+                        disabled={isReconcilingUploads}
+                        className="flex items-center space-x-2 bg-[#162A45] hover:bg-[#1f3a5e] text-white px-6 py-3 rounded-lg text-xs font-bold shadow-md transition-all disabled:opacity-50"
+                      >
+                        {isReconcilingUploads ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin text-amber-300" />
+                            <span>Computing 4-Gate Lekhpal Audit...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Wand2 className="w-4 h-4 text-amber-300" />
+                            <span>⚡ Run Live 4-Gate Lekhpal Pre-Flight Audit →</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* MODE B: 1-CLICK EVALUATION PACKET GRID */}
+              {intakeMode === 'sample' && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Card 1: Aadhaar */}
+                  <div className="bg-white border border-[#DFDBD2] rounded-lg p-5 space-y-3 shadow-sm">
+                    <div className="flex justify-between items-center text-xs font-mono font-semibold">
+                      <span className="text-[#162A45]">Primary Identity: Aadhaar</span>
+                      <span className="text-[10px] bg-blue-50 text-blue-800 px-2 py-0.5 rounded font-bold">UIDAI Standard</span>
+                    </div>
+                    <div className="h-32 bg-[#F8F7F4] border border-dashed border-[#DFDBD2] rounded flex flex-col items-center justify-center text-center p-3 text-xs text-[#525866]">
+                      <FileText className="w-8 h-8 text-[#162A45] mb-1" />
+                      <span className="font-medium text-[#111625]">aadhaar_sample.png</span>
+                      <span className="text-[10px] font-mono text-amber-800 bg-amber-50 px-2 py-0.5 rounded mt-1">
+                        Raw Scan: 482 KB — Exceeds 50 KB Portal Limit ⚠️
+                      </span>
+                    </div>
+                    <div className="text-[11px] font-mono text-gray-600 space-y-0.5">
+                      <div className="font-semibold text-gray-900">रमेश कुमार शर्मा / Ramesh Kumar Sharma</div>
+                      <div>DOB: 14/08/1996 | PIN: 206124 (Etawah)</div>
+                      <span className="inline-block bg-blue-50 text-blue-900 text-[10px] px-1.5 py-0.2 rounded font-bold">
+                        Script: Devanagari + Latin
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card 2: PAN Card */}
+                  <div className="bg-white border border-[#DFDBD2] rounded-lg p-5 space-y-3 shadow-sm">
+                    <div className="flex justify-between items-center text-xs font-mono font-semibold">
+                      <span className="text-[#162A45]">Secondary Identity: PAN</span>
+                      <span className="text-[10px] bg-amber-50 text-amber-900 px-2 py-0.5 rounded font-bold">Initial Trap</span>
+                    </div>
+                    <div className="h-32 bg-[#F8F7F4] border border-dashed border-[#DFDBD2] rounded flex flex-col items-center justify-center text-center p-3 text-xs text-[#525866]">
+                      <FileText className="w-8 h-8 text-[#C93B2B] mb-1" />
+                      <span className="font-medium text-[#111625]">pan_sample.png</span>
+                      <span className="text-[10px] font-mono text-amber-800 bg-amber-50 px-2 py-0.5 rounded mt-1">
+                        Raw Scan: 312 KB — Exceeds 20 KB Signature Limit ⚠️
+                      </span>
+                    </div>
+                    <div className="text-[11px] font-mono text-gray-600 space-y-0.5">
+                      <div className="font-semibold text-[#C93B2B]">RAMESH K SHARMA (Initial Mismatch)</div>
+                      <div>Father: DINA NATH SHARMA | PAN: ABCPS1234F</div>
+                      <span className="inline-block bg-amber-50 text-amber-900 text-[10px] px-1.5 py-0.2 rounded font-bold">
+                        Script: Latin (All-Caps)
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card 3: 10th Marksheet */}
+                  <div className="bg-white border border-[#DFDBD2] rounded-lg p-5 space-y-3 shadow-sm">
+                    <div className="flex justify-between items-center text-xs font-mono font-semibold">
+                      <span className="text-[#162A45]">DOB Proof: 10th Marksheet</span>
+                      <span className="text-[10px] bg-red-50 text-red-900 px-2 py-0.5 rounded font-bold">Inversion Trap</span>
+                    </div>
+                    <div className="h-32 bg-[#F8F7F4] border border-dashed border-[#DFDBD2] rounded flex flex-col items-center justify-center text-center p-3 text-xs text-[#525866]">
+                      <FileText className="w-8 h-8 text-[#B86B11] mb-1" />
+                      <span className="font-medium text-[#111625]">marksheet_sample.png</span>
+                      <span className="text-[10px] font-mono text-amber-800 bg-amber-50 px-2 py-0.5 rounded mt-1">
+                        Raw Scan: 840 KB — Exceeds 100 KB PDF Limit ⚠️
+                      </span>
+                    </div>
+                    <div className="text-[11px] font-mono text-gray-600 space-y-0.5">
+                      <div className="font-semibold text-[#B86B11]">SHARMA RAMESH KUMAR (Inversion)</div>
+                      <div>Father: D. N. SHARMA | Result: 1st Div</div>
+                      <span className="inline-block bg-purple-50 text-purple-900 text-[10px] px-1.5 py-0.2 rounded font-bold">
+                        DOB Authenticated Proof
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Step 1 Advance Button */}
               {reconciliation && (

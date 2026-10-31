@@ -40,7 +40,26 @@ export async function uploadDocument(
     method: 'POST',
     body: formData,
   });
-  if (!res.ok) throw new Error(`Upload failed: ${res.statusText}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Upload failed: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function reconcileSession(
+  sessionId: string,
+  workflowTarget: string = 'e_district_income'
+): Promise<ReconciliationResponse> {
+  const res = await fetch(`${API_BASE}/api/ingestion/reconcile-session`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: sessionId, workflow_target: workflowTarget }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Reconciliation failed: ${res.statusText}`);
+  }
   return res.json();
 }
 

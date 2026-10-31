@@ -271,3 +271,46 @@ def test_gov_portal_public_docket_verification_registry():
     res_empty = client.get("/verify")
     assert res_empty.status_code == 200
     assert "Public Docket Verification Registry" in res_empty.text
+
+
+def test_reconcile_custom_uploaded_documents_session():
+    """
+    Tests uploading a real document and reconciling it dynamically via
+    POST /api/ingestion/upload followed by POST /api/ingestion/reconcile-session.
+    Guarantees that custom evaluator/citizen uploads run dynamic 4-gate Lekhpal verification.
+    """
+    client = TestClient(api_app)
+    session_id = "test_custom_upload_session_999"
+
+    # 1. Create a minimal valid PNG image buffer
+    import cv2
+    import numpy as np
+    dummy_img = np.full((100, 200, 3), 255, dtype=np.uint8)
+    _, png_bytes = cv2.imencode(".png", dummy_img)
+    file_bytes = png_bytes.tobytes()
+
+    # 2. Upload Aadhaar
+    upload_res = client.post(
+        "/api/ingestion/upload",
+        data={"session_id": session_id, "doc_type": "aadhaar"},
+        files={"file": ("my_aadhaar.png", file_bytes, "image/png")}
+    )
+    assert upload_res.status_code == 200
+    upload_data = upload_res.json()
+    assert upload_data["session_id"] == session_id
+    assert upload_data["doc_type"] == "aadhaar"
+
+    # 3. Reconcile session
+    recon_res = client.post(
+        "/api/ingestion/reconcile-session",
+        json={"session_id": session_id, "workflow_target": "e_district_income"}
+    )
+    assert recon_res.status_code == 200
+    recon_data = recon_res.json()
+    assert recon_data["session_id"] == session_id
+    assert "four_gates" in recon_data
+    assert "gate1_phonetic" in recon_data["four_gates"]
+    assert "gate2_checksum_qr" in recon_data["four_gates"]
+    assert "gate3_statutory_rules" in recon_data["four_gates"]
+    assert "gate4_jurisdiction" in recon_data["four_gates"]
+

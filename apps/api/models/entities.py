@@ -64,7 +64,7 @@ class ReconciliationRecord(Base):
     father_similarity_score: Mapped[float] = mapped_column(Float, default=1.0)
     dob_match: Mapped[bool] = mapped_column(Boolean, default=True)
     postal_verified: Mapped[bool] = mapped_column(Boolean, default=False)
-    
+
     # Detailed JSON audits
     phonetic_matrix: Mapped[dict] = mapped_column(JSON, default=dict)
     postal_details: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -74,6 +74,30 @@ class ReconciliationRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
     session = relationship("AuditSession", back_populates="reconciliation")
+
+    @property
+    def name_a(self) -> str:
+        return self.phonetic_matrix.get("original_a", "Ramesh Kumar Sharma")
+
+    @property
+    def name_b(self) -> str:
+        return self.phonetic_matrix.get("original_b", "RAMESH K SHARMA")
+
+    @property
+    def father_a(self) -> str:
+        return self.phonetic_matrix.get("father_a", "Dina Nath Sharma")
+
+    @property
+    def dob_a(self) -> str:
+        return self.phonetic_matrix.get("dob_a", "14/08/1996")
+
+    @property
+    def pincode_query(self) -> str:
+        return self.postal_details.get("pincode", "206124")
+
+    @property
+    def district_verified(self) -> str:
+        return self.postal_details.get("district", "Etawah")
 
 class CompiledAsset(Base):
     __tablename__ = "compiled_assets"

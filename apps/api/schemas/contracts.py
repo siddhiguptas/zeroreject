@@ -29,6 +29,10 @@ class DocumentUploadResponse(BaseModel):
 class LoadSamplePacketRequest(BaseModel):
     workflow_target: str = "e_district_income"
 
+class ReconcileSessionRequest(BaseModel):
+    session_id: str
+    workflow_target: str = "e_district_income"
+
 # Deterministic Phonetic & Postal Schemas
 class DoubleMetaphoneMatch(BaseModel):
     name_a: str
