@@ -268,17 +268,19 @@ ZeroReject functions **100% free out-of-the-box with zero paid API keys**:
 │   │   │   ├── ocr_extractor.py       # Local optical extraction with Verhoeff Aadhaar validation
 │   │   │   ├── opencv_compiler.py     # Deskew, contour crop, and binary-search quantization
 │   │   │   ├── phonetic_reconciler.py # Indic Double Metaphone + Jaro-Winkler + India Post API
+│   │   │   ├── qr_verifier.py         # Pure-Python Verhoeff D5 algorithm + optical QR cross-verifier
 │   │   │   ├── statutory_rag.py       # BM25Okapi local hybrid statutory knowledge base
 │   │   │   └── voice_explainer.py     # Edge-TTS neural speech synthesis service
-│   │   └── tests/                     # Automated backend test suite (15/15 passing)
+│   │   └── tests/                     # Automated backend test suite (23/23 passing)
 │   │       ├── test_affidavit_generator.py
 │   │       ├── test_free_ai_stack.py
+│   │       ├── test_lekhpal_and_packet_export.py
 │   │       ├── test_opencv_compiler.py
 │   │       ├── test_phonetic_reconciler.py
 │   │       └── test_playwright_self_healing.py
 │   │
-│   ├── gov-portal-target/             # Standalone Legacy Government Target Portal (Port 8090)
-│   │   └── app.py                     # Realistic e-District portal with strict checks & chaos toggle
+│   ├── gov_portal_target/             # Standalone Legacy Government Target Portal (Port 8090)
+│   │   └── app.py                     # Realistic e-District portal with strict checks, multi-profiles & chaos toggle
 │   │
 │   └── web/                           # Next.js 15 App Router Frontend (Port 3000)
 │       ├── package.json
@@ -338,14 +340,19 @@ All backend REST and Server-Sent Events (SSE) endpoints are hosted on `http://lo
 
 | Endpoint | Method | Input Payload | Output Summary | Description |
 | :--- | :---: | :--- | :--- | :--- |
-| `/api/ingestion/load-sample-packet` | `POST` | `{"workflow_target": "e_district_income"}` | `ReconciliationResponse` | **1-Click Judge Demo**: Runs real OCR on sample documents, computes phonetic matrices, and queries live India Post API. |
-| `/api/ingestion/upload` | `POST` | `multipart/form-data` (`file`, `session_id`, `doc_type`) | `DocumentUploadResponse` | Ingests real user document. Enforces magic-byte check, 15MB cap, path sanitization, and extracts structured fields. |
-| `/api/compiler/compile` | `POST` | `{"session_id": "...", "target_portal": "e_district"}` | `CompileAssetsResponse` | Runs OpenCV deskew/quantization loop and synthesizes bilingual Statutory Self-Declaration Affidavit PDF. |
+| `/api/ingestion/upload` | `POST` | `multipart/form-data` (`file`, `session_id`, `doc_type`) | `DocumentUploadResponse` | Ingests real citizen/mentor document. Enforces magic-byte check, 15MB cap, path sanitization, and extracts structured fields via local OCR. |
+| `/api/ingestion/reconcile-session` | `POST` | `{"session_id": "...", "workflow_target": "..."}` | `ReconciliationResponse` | Runs the 4-Gate Lekhpal Pre-Flight Audit on user-uploaded documents (phonetics, Verhoeff checksums, statutory rules, live India Post API). |
+| `/api/ingestion/load-sample-packet` | `POST` | `{"workflow_target": "e_district_income"}` | `ReconciliationResponse` | **1-Click Judge Demo**: Runs real OCR on sample documents from disk, computes phonetic matrices, and queries live India Post API. |
+| `/api/compiler/compile` | `POST` | `{"session_id": "...", "target_portal": "e_district"}` | `CompileAssetsResponse` | Runs OpenCV deskew/quantization loop and synthesizes bilingual Statutory Annexure 'E' Affidavit PDF with embedded verification QR. |
+| `/api/compiler/export-packet/{session_id}` | `GET` | Path param: `session_id` | `application/zip` | **CSC Operator Packet Exporter**: Bundles 200x230 photo, 140x60 signature, bilingual affidavit PDF, and pre-flight manifest JSON into a `.zip`. |
+| `/api/audit/benchmark-validation` | `POST` | None | `BenchmarkSimulationResponse` | **Rejection Simulator**: Compares raw uncured citizen scans (422 rejected) vs ZeroReject cured submission (200 accepted) against Rule 18-A. |
 | `/api/execution/stream/{session_id}` | `GET` | Query param: `chaos_mode=true\|false` | `text/event-stream` (SSE) | Emits real-time Playwright execution steps, DOM mappings, base64 screenshots, 502 chaos catches, and pauses at OTP. |
 | `/api/execution/authorize-otp` | `POST` | `{"session_id": "...", "otp_code": "719340"}` | `FinalSubmissionReceipt` | Human-in-the-Loop OTP authorization: agent finalizes filing on target portal and returns stamped receipt. |
 | `/api/voice/explain` | `POST` | `{"query": "...", "session_id": "...", "language": "en\|hi"}` | `{"explanation": "...", "audio_base64": "..."}` | 100% Free Multilingual Voice Copilot using local BM25 RAG, 4-tier free LLM router, and neural `edge-tts`. |
 | `/api/audit/telemetry` | `GET` | None | `JudgeTelemetryResponse` | Live runtime telemetry: database dialect, India Post latency, active sessions, and recent deterministic tool logs. |
 | `/api/audit/verify-zero-mock` | `GET` | None | `{"zero_mock_verified": true, ...}` | Proves all outputs are computed dynamically from real database records and file checksums. |
+| Target Portal: `/portal/validate-upload` | `POST` | `multipart/form-data` | `200` or `422 JSON` | Standalone Portal (Port 8090) server-side enforcer rejecting files over 50KB/20KB or un-reconciled name mismatches. |
+| Target Portal: `/verify?ref={ref}` | `GET` | Query param: `ref` | `text/html` | Public State Governance Electronic Records Registry verifying authenticity and SHA-256 hashes of submitted dockets. |
 
 ---
 
@@ -369,33 +376,42 @@ Open `http://localhost:3000` in your browser.
 
 ---
 
-### 7.2 How Judges Can Stress-Test This Live in 90 Seconds
+### 7.2 How Judges and Mentors Can Test This (Two Pathways)
 
-Follow this exact 5-step evaluation script during judging:
+#### Pathway A — Test With Your Own Documents (Live Upload Sandbox)
+1. **Upload Custom Identity Proofs (Step 1)**:
+   Under **Step 1: Document Intake**, select **"📁 Upload Custom Documents (Live Sandbox)"**.
+   - Drag and drop your own Aadhaar image/PDF and PAN card image/PDF.
+   - Watch real-time OpenCV enhancement and local OCR extract your actual full name, ID number, and PIN code on the fly.
+2. **Execute 4-Gate Lekhpal Pre-Flight Audit (Step 2)**:
+   Click **"⚡ Run Live 4-Gate Lekhpal Pre-Flight Audit"**:
+   - **Gate 1**: Cross-script phonetic graph & token sort comparison.
+   - **Gate 2**: Aadhaar Verhoeff D5 algorithm check & PAN individual citizenship verification.
+   - **Gate 3**: Statutory rule check against official guidelines.
+   - **Gate 4**: Live query to India Post API (`api.postalpincode.in`) verifying jurisdiction.
+3. **Auto-Cure Biometrics & Synthesize Legal Affidavit (Step 3)**:
+   Click **"Auto-Cure Biometric Assets"**:
+   - Compresses photo to 200x230 px (<= 50KB) and signature to 140x60 px (<= 20KB).
+   - Generates a bilingual **Annexure 'E' Statutory Affidavit PDF** carrying your extracted names and a vector verification QR code.
+   - Click **"Download Complete CSC Packet (.ZIP)"** to export all assets + pre-flight JSON manifest.
+4. **Launch Playwright Autonomous Filing with Chaos Resilience (Step 4)**:
+   Toggle **"Chaos Mode: ON"** to test 502 recovery. Click **"Launch Autonomous Playwright Filing"**.
+   - Watch real-time DOM logs as Playwright navigates the target portal on Port 8090, auto-recovers from the 502 server crash, and pauses safely for citizen OTP consent.
+5. **Authorize OTP & Verify Public Docket (Step 5)**:
+   Enter OTP `719340` and authorize submission.
+   - Stamped receipt PDF is generated.
+   - Click **"Verify Docket Live on Portal Verification Registry"** to verify the persistent record on `http://localhost:8090/verify?ref=...`.
 
-1. **Step 1 — Verify Live Cross-Document Phonetic X-Ray**:
-   On the homepage, toggle between the 3 tabs:
-   - *Devanagari vs Latin Script Drift* (`"रमेश कुमार शर्मा"` vs `"RAMESH KUMAR SHARMA"`).
-   - *Middle Initial Abbreviation* (`"Ramesh Kumar Sharma"` vs `"RAMESH K SHARMA"`).
-   - *Surname Inversion* (`"Ramesh Kumar Sharma"` vs `"SHARMA RAMESH KUMAR"`).
-   Notice the real-time calculated Double Metaphone codes and Jaro-Winkler scores ($0.942$).
-2. **Step 2 — Click "1-Click Evaluation Packet" (Panel A)**:
-   Scroll down to the Studio and click **"Load Real Evaluation Citizen Packet"**.
-   - Watch the backend execute real local OCR on `aadhaar_sample.png`, `pan_sample.png`, and `marksheet_sample.png`.
-   - Watch the live telemetry badge query `api.postalpincode.in/pincode/206124` to verify Bakewar, Etawah, Uttar Pradesh in real time.
-3. **Step 3 — Inspect Auto-Cured Biometrics (Panel C)**:
-   Click **"Trigger Adaptive Auto-Cure & Affidavit Synthesizer"**.
-   - View the before/after OpenCV preview: the raw $180\text{ KB}$ signature is cropped, contour-binarized, and compressed to exactly $19.2\text{ KB}$ ($140 \times 60\text{ px}$).
-   - Download the generated Statutory Affidavit PDF and verify the embedded Sovereign Seal and Passport Seva Annexure 'E' circular citations.
-4. **Step 4 — Enable "Judge Chaos Mode" & Watch Playwright Self-Heal (Panel D)**:
-   Advance to Panel D. Flip the **"Judge Chaos Toggle (Inject HTTP 502 Errors)"** switch to **ON**. Click **"Launch Autonomous Filing Workflow"**.
-   - The browser navigates to the government portal on Port 8090.
-   - At Step 2, the server throws an intentional HTTP `502 Bad Gateway`.
-   - Watch the console log: the agent catches the error, rolls back to Checkpoint 1, updates DOM selectors, and auto-retries with exponential backoff!
-   - The agent uploads the cured assets and halts safely at the **Human-in-the-Loop OTP Gate**.
-5. **Step 5 — Authorize OTP & Open Judge Audit Drawer**:
-   Enter OTP `719340` and click **"Authorize Final Government Filing"**. The official receipt (`UP-EDIST-2026-...`) is stamped.
-   - Click **"Proof of Zero-Mock Telemetry"** in the top ribbon to inspect real SQL query latency, SHA-256 document hashes, and live external API traces.
+#### Pathway B — 1-Click Evaluation Packet (90-Second Express Demo)
+If you do not have personal document scans handy:
+1. In Step 1, select **"⚡ 1-Click Evaluation Packet (Sample Scans)"**.
+2. Click **"⚡ Load Real Citizen Packet (Etawah, UP — PIN 206124)"**.
+3. The system loads authentic raster scans from disk (`aadhaar_sample.png`, `pan_sample.png`, `marksheet_sample.png`), runs the exact same live OCR, phonetic matrix, and live India Post API, and advances through Steps 2 to 5 seamlessly.
+
+#### Pathway C — Rejection Simulator (Raw 422 vs. Cured 200 Benchmark)
+1. Open the top-right **"System Telemetry & Audit Drawer"**.
+2. Click the **"⚡ Rejection Simulator"** tab.
+3. Click **"Run Raw vs. Cured Benchmark"** to see side-by-side evidence of why raw citizen submissions fail with **HTTP 422** (Rule 18-A violations) versus how ZeroReject achieves guaranteed **HTTP 200** first-pass acceptance.
 
 ---
 

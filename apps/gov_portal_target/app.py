@@ -124,7 +124,10 @@ def render_page(title: str, body_html: str, step: int = 1, portal_key: str = "e_
         <header class="bg-blue-900 text-white shadow">
             <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
                 <div class="flex items-center space-x-3">
-                    <div class="w-10 h-10 bg-amber-500 rounded-full flex items-center justify-center font-bold text-blue-950 text-xl border-2 border-white">GOV</div>
+                    <svg class="w-8 h-8 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        <path d="M9 12l2 2 4-4"/>
+                    </svg>
                     <div>
                         <h1 class="font-bold text-lg leading-tight" id="portal-header-title">{profile['header_title']}</h1>
                         <p class="text-xs text-blue-200" id="portal-header-subtitle">{profile['subtitle']}</p>
@@ -136,12 +139,6 @@ def render_page(title: str, body_html: str, step: int = 1, portal_key: str = "e_
                 </div>
             </div>
         </header>
-
-        <!-- Chaos Status Banner -->
-        <div class="bg-amber-100 border-b border-amber-300 px-4 py-1.5 text-xs text-amber-900 flex justify-between items-center max-w-5xl mx-auto mt-2 rounded">
-            <span><strong>Target Mode B</strong>: Standalone Public Governance Portal (Port 8090)</span>
-            <span id="chaos-indicator">Chaos Mode: <strong>{"ACTIVE (Will Inject 502)" if chaos_state["enabled"] else "INACTIVE"}</strong></span>
-        </div>
 
         <!-- Form Progress Tracker -->
         <div class="max-w-5xl mx-auto px-4 mt-4">
