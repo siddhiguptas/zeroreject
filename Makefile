@@ -39,13 +39,13 @@ lint:
 	@echo "==> Running Ruff linter on Python services..."
 	@$(RUFF) check .
 	@echo "==> Verifying Next.js TypeScript strict types & production build..."
-	@cd apps/web && npm run build
+	@cd apps/web && rm -rf .next && npm run build
 
 audit:
 	@echo "==> Executing full Senior Engineering audit sweep (lint + test + build)..."
 	@$(RUFF) check .
 	@PYTHONPATH=. $(PYTEST) apps/api/tests/ -q
-	@cd apps/web && npm run build
+	@cd apps/web && rm -rf .next && npm run build
 	@echo "==> Audit complete! Zero errors and zero warnings across all layers."
 
 dev-api:
