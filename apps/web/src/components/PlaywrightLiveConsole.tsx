@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, RotateCcw, AlertTriangle, ShieldCheck, Terminal, CheckCircle2, Lock, Zap, Download, Check } from 'lucide-react';
+import { Play, RotateCcw, AlertTriangle, ShieldCheck, Terminal, CheckCircle2, Lock, Zap, Download, Check, ExternalLink } from 'lucide-react';
 import { ExecutionStepEvent } from '@/types';
 import { createExecutionEventSource, toggleChaos, authorizeOtp } from '@/lib/api-client';
 
@@ -212,13 +212,16 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
               <span className="w-2.5 h-2.5 rounded-full bg-red-500"></span>
               <span className="w-2.5 h-2.5 rounded-full bg-yellow-500"></span>
               <span className="w-2.5 h-2.5 rounded-full bg-green-500"></span>
-              <span className="ml-2 text-slate-300 text-[11px] font-mono">
-                {status === 'AWAITING_OTP' || status === 'VERIFIED'
-                  ? 'http://localhost:8090/step4 (OTP Authorization Gate)'
-                  : status === 'EXECUTING'
-                  ? 'http://localhost:8090/step2 (Multi-Step In-Flight)'
-                  : 'http://localhost:8090/ (Public Governance Target)'}
-              </span>
+              <a
+                href={`http://localhost:8090/?portal=${workflowTarget || 'e_district_income'}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-2 text-slate-300 hover:text-amber-300 text-[11px] font-mono flex items-center space-x-1 underline decoration-dotted transition-colors"
+                title="Click to open live target portal running on port 8090"
+              >
+                <span>http://localhost:8090/?portal={workflowTarget || 'e_district_income'}</span>
+                <ExternalLink className="w-3 h-3 text-amber-400" />
+              </a>
             </div>
             <span className="text-[10px] text-slate-400 font-mono">Playwright Chromium 130</span>
           </div>
@@ -357,7 +360,7 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
 
           {/* State 4: Officially Stamped Filing Receipt (ONLY displayed AFTER OTP Authorization) */}
           {status === 'VERIFIED' && receiptAck && (
-            <div className="bg-emerald-950/90 border-t border-emerald-500 p-4 text-xs font-mono text-emerald-200 space-y-2 animate-in fade-in">
+            <div className="bg-emerald-950/90 border-t border-emerald-500 p-4 text-xs font-mono text-emerald-200 space-y-3 animate-in fade-in">
               <div className="flex items-center space-x-1.5 font-bold text-emerald-300">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                 <span>OFFICIAL STAMPED RECEIPT GENERATED</span>
@@ -365,16 +368,27 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
               <div className="text-[11px] text-emerald-100">
                 Acknowledgement Ref: <strong className="text-white text-xs">{receiptAck}</strong>
               </div>
-              <a
-                href={`${API_BASE}/api/execution/receipt/${sessionId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                download
-                className="mt-2 flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white font-mono font-bold text-xs py-2 px-3 rounded shadow transition-all"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>⬇ Download Official Stamped Portal Receipt (PDF)</span>
-              </a>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <a
+                  href={`${API_BASE}/api/execution/receipt/${sessionId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download
+                  className="flex-1 flex items-center justify-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-mono font-bold text-xs py-2 px-3 rounded shadow transition-all"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>⬇ Download Stamped Receipt (PDF)</span>
+                </a>
+                <a
+                  href={`http://localhost:8090/verify?ref=${receiptAck}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center space-x-1.5 bg-[#162A45] hover:bg-[#1f3a5e] text-amber-300 border border-slate-700 font-mono font-bold text-xs py-2 px-3 rounded shadow transition-all"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>🔍 Verify on Portal Registry</span>
+                </a>
+              </div>
             </div>
           )}
         </div>

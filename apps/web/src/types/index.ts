@@ -59,6 +59,22 @@ export interface PostalValidationResult {
   is_cached: boolean;
 }
 
+export interface GateAuditDetail {
+  gate_num: number;
+  title: string;
+  status: string;
+  verdict: string;
+  details: string;
+  [key: string]: any;
+}
+
+export interface FourGateAudit {
+  gate1_phonetic: GateAuditDetail;
+  gate2_checksum_qr: GateAuditDetail;
+  gate3_statutory_rules: GateAuditDetail;
+  gate4_jurisdiction: GateAuditDetail;
+}
+
 export interface ReconciliationResponse {
   session_id: string;
   workflow_target: string;
@@ -76,6 +92,31 @@ export interface ReconciliationResponse {
     clause: string;
   }>;
   curation_recommendations: string[];
+  four_gates?: FourGateAudit;
+}
+
+export interface BenchmarkSimulationResponse {
+  benchmark_id: string;
+  tested_against: string;
+  raw_uncured: {
+    scenario: string;
+    http_status: number;
+    status: string;
+    violations_count: number;
+    violations: Array<{ code: string; field: string; message: string; penalty: string }>;
+    estimated_citizen_delay: string;
+  };
+  zeroreject_cured: {
+    scenario: string;
+    http_status: number;
+    status: string;
+    violations_count: number;
+    violations: Array<any>;
+    four_gates_passed: string[];
+    cured_asset_specs: Record<string, string>;
+    estimated_citizen_delay: string;
+  };
+  delta_risk_reduction: string;
 }
 
 export interface CompiledAssetDetail {

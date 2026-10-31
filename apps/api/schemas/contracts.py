@@ -77,6 +77,7 @@ class ReconciliationResponse(BaseModel):
     postal_reconciliation: PostalValidationResult
     statutory_citations: list[dict[str, str]]
     curation_recommendations: list[str]
+    four_gates: dict[str, Any] | None = None
 
 # OpenCV Compiler Schemas
 class CompileAssetsRequest(BaseModel):

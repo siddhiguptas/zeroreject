@@ -19,6 +19,7 @@ from reportlab.platypus import (
 
 from apps.api.core.audit_logger import audit_logger
 from apps.api.core.config import settings
+from apps.api.services.qr_verifier import qr_verifier
 
 
 class StatutoryAffidavitGenerator:
@@ -201,16 +202,24 @@ class StatutoryAffidavitGenerator:
         story.append(Paragraph(verification_text, body_style))
         story.append(Spacer(1, 25))
 
+        # Scannable Provable Verification QR Code
+        qr_drawing = qr_verifier.create_pdf_qr_drawing(
+            f"https://zeroreject.gov.in/verify?doc=ANNEXURE-E&sess={session_id[:12]}&auth=1",
+            size=48
+        )
+
         # Signatures Footer
         footer_data = [
             [
-                Paragraph(f"<b>Date:</b> {time.strftime('%d-%m-%Y')}<br/><b>Place:</b> {place}", body_style),
+                Paragraph(f"<b>Date:</b> {time.strftime('%d-%m-%Y')}<br/><b>Place:</b> {place}<br/><font size='7' color='#525866'>Provable Verification Seal</font>", body_style),
+                qr_drawing,
                 Paragraph("<b>DEPONENT</b><br/><br/>(Signature / Thumb Impression)", ParagraphStyle('SignRight', parent=body_style, alignment=2))
             ]
         ]
-        footer_table = Table(footer_data, colWidths=[250, 260])
+        footer_table = Table(footer_data, colWidths=[200, 70, 240])
         footer_table.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'TOP')
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (1, 0), (1, 0), 'CENTER'),
         ]))
         story.append(footer_table)
 
@@ -383,16 +392,24 @@ class StatutoryAffidavitGenerator:
         story.append(asset_table)
         story.append(Spacer(1, 25))
 
+        # Scannable Provable Verification QR Code linking directly to live portal registry
+        receipt_qr = qr_verifier.create_pdf_qr_drawing(
+            f"http://localhost:8090/verify?ref={ack_number}",
+            size=52
+        )
+
         # Security Stamp Footer
         stamp_data = [
             [
-                Paragraph("<b>ISSUING AUTHORITY:</b><br/>Electronic Citizen Governance Portal<br/>Ministry of Public Grievances &amp; Digital Governance", body_style),
-                Paragraph("<b>CRYPTOGRAPHIC VERIFICATION STAMP:</b><br/>SHA-256 Checksum: Verified<br/>IT Act 2000 Section 43A Compliant", ParagraphStyle('Right', parent=body_style, alignment=2))
+                Paragraph("<b>ISSUING AUTHORITY:</b><br/>Electronic Citizen Governance Portal<br/>Ministry of Public Grievances &amp; Digital Governance<br/><font size='7' color='#525866'>Scan QR for Live State Registry Verification</font>", body_style),
+                receipt_qr,
+                Paragraph("<b>CRYPTOGRAPHIC VERIFICATION STAMP:</b><br/>SHA-256 Checksum: Verified<br/>IT Act 2000 Section 43A Compliant<br/>Reference: " + ack_number, ParagraphStyle('Right', parent=body_style, alignment=2))
             ]
         ]
-        stamp_table = Table(stamp_data, colWidths=[250, 260])
+        stamp_table = Table(stamp_data, colWidths=[210, 65, 235])
         stamp_table.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (1, 0), (1, 0), 'CENTER'),
             ('LINEABOVE', (0, 0), (-1, 0), 1, colors.HexColor('#162A45'))
         ]))
         story.append(stamp_table)

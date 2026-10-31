@@ -1,10 +1,11 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.core.config import settings
-from apps.api.core.database import init_db
+from apps.api.core.database import get_db, init_db
 from apps.api.routers import compiler, execution, ingestion, judge_audit, voice
 
 
@@ -47,6 +48,11 @@ async def health_check():
         "database": "SQLite (WAL Mode)" if settings.DATABASE_URL.startswith("sqlite") else "PostgreSQL",
         "zero_mock_policy": "ENFORCED"
     }
+
+@app.get("/api/v1/export-packet/{session_id}")
+async def export_packet_v1_alias(session_id: str, db: AsyncSession = Depends(get_db)):
+    """Feature B Alias: One-Click .ZIP Citizen & CSC Operator Packet Exporter."""
+    return await compiler.export_csc_packet(session_id, db)
 
 if __name__ == "__main__":
     import uvicorn

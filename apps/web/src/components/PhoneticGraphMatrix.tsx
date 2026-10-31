@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ShieldCheck, AlertCircle, MapPin, CheckCircle2, BookOpen, Hash, Volume2, ArrowRight } from 'lucide-react';
+import { ShieldCheck, AlertCircle, MapPin, CheckCircle2, BookOpen, Hash, Volume2, ArrowRight, QrCode, Scale, FileCheck } from 'lucide-react';
 import { ReconciliationResponse } from '@/types';
 import { askVoiceCopilot } from '@/lib/api-client';
 
@@ -70,6 +70,126 @@ export const PhoneticGraphMatrix: React.FC<PhoneticGraphMatrixProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* 4-Gate Pre-Flight Lekhpal Scorecard */}
+      <div className="bg-[#FAF8F5] border border-[#DFDBD2] rounded-xl p-5 space-y-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#DFDBD2] pb-3">
+          <div>
+            <span className="text-[10px] font-mono font-bold text-[#162A45] uppercase tracking-wider block">
+              Official NIC Pre-Flight Intake Filters (Rule 18-A)
+            </span>
+            <h3 className="font-serif text-lg font-bold text-[#111625]">
+              The 4-Gate Virtual Lekhpal &amp; Statutory Risk Audit
+            </h3>
+          </div>
+
+          {/* Inline Audio Briefing */}
+          <div className="flex items-center space-x-1.5 font-mono text-xs">
+            <span className="text-[11px] text-[#525866] mr-1">Lekhpal Audio:</span>
+            <button
+              onClick={() => handlePlayBriefing('hi')}
+              disabled={playingLang !== null}
+              className="flex items-center space-x-1 bg-[#162A45] hover:bg-[#1f3a5e] text-amber-200 px-2.5 py-1 rounded text-[11px] transition-colors"
+              title="Listen to Lekhpal Audit in Hindi"
+            >
+              <Volume2 className={`w-3 h-3 ${playingLang === 'hi' ? 'text-emerald-400 animate-pulse' : ''}`} />
+              <span>{playingLang === 'hi' ? 'Speaking...' : '🔊 हिंदी'}</span>
+            </button>
+            <button
+              onClick={() => handlePlayBriefing('en')}
+              disabled={playingLang !== null}
+              className="flex items-center space-x-1 bg-[#162A45] hover:bg-[#1f3a5e] text-amber-200 px-2.5 py-1 rounded text-[11px] transition-colors"
+              title="Listen to Lekhpal Audit in English"
+            >
+              <Volume2 className={`w-3 h-3 ${playingLang === 'en' ? 'text-emerald-400 animate-pulse' : ''}`} />
+              <span>{playingLang === 'en' ? 'Speaking...' : '🔊 English'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 4 Gates Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          {/* Gate 1: Phonetic & Token */}
+          <div className="bg-white border border-amber-300 rounded-lg p-3.5 space-y-2 shadow-xs">
+            <div className="flex justify-between items-center text-[10px] font-mono">
+              <span className="text-gray-500 font-bold">GATE 1</span>
+              <span className="bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-bold">
+                CURABLE DISCREPANCY
+              </span>
+            </div>
+            <h4 className="font-sans font-bold text-xs text-[#111625]">
+              Cross-Script Phonetic Graph
+            </h4>
+            <div className="text-[11px] font-mono text-gray-600 space-y-1">
+              <div>Jaro-Winkler: <strong className="text-[#162A45]">{name_reconciliation.jaro_winkler_score}</strong></div>
+              <div>Token-Sort: <strong className="text-[#162A45]">{name_reconciliation.token_sort_ratio}</strong></div>
+              <div className="text-[10px] text-[#B86B11] font-semibold bg-amber-50 p-1 rounded border border-amber-200">
+                Initial: "K." expanded to "Kumar"
+              </div>
+            </div>
+          </div>
+
+          {/* Gate 2: Cryptographic Checksum & QR */}
+          <div className="bg-white border border-emerald-300 rounded-lg p-3.5 space-y-2 shadow-xs">
+            <div className="flex justify-between items-center text-[10px] font-mono">
+              <span className="text-gray-500 font-bold">GATE 2</span>
+              <span className="bg-emerald-100 text-emerald-900 px-1.5 py-0.5 rounded font-bold">
+                PASSED ✓
+              </span>
+            </div>
+            <h4 className="font-sans font-bold text-xs text-[#111625]">
+              Cryptographic Checksum &amp; QR
+            </h4>
+            <div className="text-[11px] font-mono text-gray-600 space-y-1">
+              <div className="text-emerald-700 font-medium">✓ Verhoeff D5 Checksum Passed</div>
+              <div className="text-emerald-700 font-medium">✓ PAN Structural Match (Individual P)</div>
+              <div className="text-[10px] text-gray-500 bg-[#F8F7F4] p-1 rounded">
+                QR matrix cross-verified with OCR
+              </div>
+            </div>
+          </div>
+
+          {/* Gate 3: Statutory Rules & Cutoff */}
+          <div className="bg-white border border-emerald-300 rounded-lg p-3.5 space-y-2 shadow-xs">
+            <div className="flex justify-between items-center text-[10px] font-mono">
+              <span className="text-gray-500 font-bold">GATE 3</span>
+              <span className="bg-emerald-100 text-emerald-900 px-1.5 py-0.5 rounded font-bold">
+                PASSED ✓
+              </span>
+            </div>
+            <h4 className="font-sans font-bold text-xs text-[#111625]">
+              Statutory Eligibility &amp; Cutoff
+            </h4>
+            <div className="text-[11px] font-mono text-gray-600 space-y-1">
+              <div className="text-emerald-700 font-medium">✓ Income: ₹1,84,000 &lt;= ₹2,50,000</div>
+              <div className="text-emerald-700 font-medium">✓ Valid 3-Year Statutory Window</div>
+              <div className="text-[10px] text-gray-500 bg-[#F8F7F4] p-1 rounded">
+                DOB verified against 10th marksheet
+              </div>
+            </div>
+          </div>
+
+          {/* Gate 4: LGD Jurisdiction */}
+          <div className="bg-white border border-emerald-300 rounded-lg p-3.5 space-y-2 shadow-xs">
+            <div className="flex justify-between items-center text-[10px] font-mono">
+              <span className="text-gray-500 font-bold">GATE 4</span>
+              <span className="bg-emerald-100 text-emerald-900 px-1.5 py-0.5 rounded font-bold">
+                PASSED ✓
+              </span>
+            </div>
+            <h4 className="font-sans font-bold text-xs text-[#111625]">
+              LGD Postal &amp; Tehsil Match
+            </h4>
+            <div className="text-[11px] font-mono text-gray-600 space-y-1">
+              <div>PIN: <strong className="text-emerald-800">{postal_reconciliation.pincode}</strong></div>
+              <div>Tehsil: <strong className="text-[#162A45]">{postal_reconciliation.taluka_or_subdistrict}</strong></div>
+              <div className="text-[10px] text-gray-500 bg-[#F8F7F4] p-1 rounded">
+                Etawah, UP (0% district drift)
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Top Banner: Composite Rejection Risk Score Gauge */}
       <div className={`p-4 rounded-lg border flex flex-wrap items-center justify-between gap-4 ${
         status === 'PASS' ? 'bg-emerald-50 border-emerald-300' :

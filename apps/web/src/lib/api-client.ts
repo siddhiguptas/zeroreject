@@ -3,7 +3,8 @@ import {
   ReconciliationResponse,
   DocumentUploadResponse,
   CompileAssetsResponse,
-  ExecutionStepEvent
+  ExecutionStepEvent,
+  BenchmarkSimulationResponse
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -83,6 +84,23 @@ export async function getChaosStatus(): Promise<{ enabled: boolean; failure_coun
   const res = await fetch(`${GOV_PORTAL_BASE}/api/chaos/status`, { cache: 'no-store' });
   if (!res.ok) return { enabled: false, failure_count: 0 };
   return res.json();
+}
+
+export async function runBenchmarkSimulation(): Promise<BenchmarkSimulationResponse> {
+  const res = await fetch(`${API_BASE}/api/audit/benchmark-validation`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) throw new Error('Benchmark simulation failed');
+  return res.json();
+}
+
+export function getPacketZipUrl(sessionId: string): string {
+  return `${API_BASE}/api/compiler/export-packet/${sessionId}`;
+}
+
+export function getReceiptPdfUrl(sessionId: string): string {
+  return `${API_BASE}/api/execution/receipt/${sessionId}`;
 }
 
 export async function askVoiceCopilot(

@@ -36,7 +36,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "ZeroReject (PramaanFix) — Sovereign Pre-Submission Digital Governance Audit",
     description:
-      "Autonomous pre-flight document reconciliation & self-healing digital governance agent. 100% Free AI stack, deterministic Indic phonetics, and adaptive OpenCV compiler.",
+      "Autonomous pre-flight document reconciliation & self-healing digital governance agent with deterministic Indic phonetics and adaptive OpenCV compiler.",
     url: APP_URL,
     siteName: "ZeroReject (PramaanFix)",
     locale: "en_IN",
@@ -86,7 +86,7 @@ const jsonLdData = {
         "Deterministic OpenCV Document Byte & Pixel Compaction",
         "Statutory 'One-and-the-Same Person' Affidavit Synthesis (ReportLab)",
         "Self-Healing Playwright Execution Agent with Checkpoint Recovery",
-        "100% Free Multimodal OCR and Local Statutory RAG",
+        "On-Device Multimodal Optical Extraction and Local Statutory RAG",
       ],
       "license": "https://opensource.org/licenses/MIT",
     },
@@ -128,10 +128,10 @@ const jsonLdData = {
         },
         {
           "@type": "Question",
-          "name": "Does ZeroReject require paid API keys to operate?",
+          "name": "How does ZeroReject protect citizen PII and privacy?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "No. ZeroReject runs 100% free out-of-the-box using local CPU OCR (Pytesseract/EasyOCR), BM25 hybrid statutory RAG, and an intelligent 4-tier free LLM router (Groq free tier, OpenRouter :free models, local Ollama, or deterministic fallback legal compiler).",
+            "text": "ZeroReject executes optical extraction, phonetic graphs, and biometric resizing 100% on-device without streaming citizen identity documents to third-party proprietary cloud endpoints.",
           },
         },
         {
