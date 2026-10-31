@@ -1,9 +1,11 @@
 <p align="center">
-  <img src="docs/assets/logo-banner.svg" alt="ZeroReject (PramaanFix) Logo" width="760" />
+  <img src="docs/assets/logo-mark.svg" alt="ZeroReject (PramaanFix) Seal" width="110" height="110" />
 </p>
 
+<h1 align="center">ZeroReject (PramaanFix)</h1>
+
 <p align="center">
-  <strong>Autonomous Pre-Flight Cross-Document Mismatch Reconciler & Self-Healing Bureaucracy Engine</strong><br />
+  <strong>Autonomous Pre-Flight Cross-Document Mismatch Reconciler &amp; Self-Healing Bureaucracy Engine</strong><br />
   <em>Eliminating the &gt;60% rejection rate of citizen and MSME applications across Indian public governance portals.</em>
 </p>
 
@@ -65,46 +67,95 @@ The market is flooded with "GenAI Government Chatbots" that summarize PDFs or of
 
 ### 3.1 End-to-End System Dataflow
 
+```text
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                      CITIZEN INTAKE & SYSTEM STUDIO (Next.js 15 • http://localhost:3000)               │
+│                                                                                                        │
+│   [ Live Telemetry Header ]        [ Cross-Document Visual X-Ray ]       [ Slide-Over Inspector ]      │
+│   • Sovereign status indicator     • Field-by-field token alignment      • Live audit trail & PII red. │
+│   • Zero-key engine heartbeat      • Indic phonetic match matrix         • Real-time latency tracker   │
+│                                                                                                        │
+│   [ Step 1: Intake Sandbox ] ──► [ Step 2: Phonetic Engine ] ──► [ Step 3: OpenCV ] ──► [ Step 4/5 ]   │
+│   (Upload Aadhaar, PAN, Photo)    (Transliteration + Metaphone)   (Binary-Search KB)     (PDF & Portal)│
+└───────────────────────────────────────────────────┬────────────────────────────────────────────────────┘
+                                                    │ REST API / SSE Streams
+                                                    ▼
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                         FASTAPI CORE BACKEND ENGINE (Python 3.13 • http://localhost:8000)              │
+│                                                                                                        │
+│   ┌──────────────────────────┐   ┌──────────────────────────┐   ┌──────────────────────────────────┐   │
+│   │ 1. STATUTORY AUDIT       │   │ 2. PHONETIC RECONCILER   │   │ 3. OPENCV BIOMETRIC COMPILER     │   │
+│   │ • Verhoeff D5 Checksum   │   │ • Indic Transliteration  │   │ • Haar Cascade Portrait Detector │   │
+│   │ • PAN Structural Regex   │   │ • Double Metaphone Graph │   │ • Ink Stroke Contour Isolator    │   │
+│   │ • Live India Post LGD    │   │ • Jaro-Winkler ≥ 0.85    │   │ • Binary Search Size Quantizer   │   │
+│   └────────────┬─────────────┘   └────────────┬─────────────┘   └────────────────┬─────────────────┘   │
+│                │                              │                                  │                     │
+│                └──────────────────────────────┼──────────────────────────────────┘                     │
+│                                               ▼                                                        │
+│   ┌────────────────────────────────────────────────────────────────────────────────────────────────┐   │
+│   │ 4. STATUTORY AFFIDAVIT SYNTHESIZER (ReportLab Engine)                                          │   │
+│   │ • Bilingual Legal Affidavit PDF  • Passport Seva Rule 4b / EPFO SOP Citations  • QR Code Seal  │   │
+│   └───────────────────────────────────────────┬────────────────────────────────────────────────────┘   │
+│                                               │                                                        │
+│   ┌───────────────────────────────────────────┴────────────────────────────────────────────────────┐   │
+│   │ 5. SELF-HEALING PLAYWRIGHT BUREAUCRACY AGENT                                                   │   │
+│   │ • Multi-Step Portal DOM Injection • Chaos Recovery (HTTP 502/504 Backoff) • Human OTP Gate     │   │
+│   └───────────────────────────────────────────┬────────────────────────────────────────────────────┘   │
+└───────────────────────────────────────────────┼────────────────────────────────────────────────────────┘
+                                                │ Automated Submission & Verification
+                                                ▼
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                   STANDALONE TARGET e-DISTRICT PORTAL (FastAPI • http://localhost:8090)                │
+│                                                                                                        │
+│   • Strict Statutory Gatekeeping: Photo ≤ 50KB • Signature ≤ 20KB • Strict Regex Validators            │
+│   • Active Chaos Injection Engine: Simulates HTTP 502 / 504 drops & dynamic DOM element shifts         │
+│   • Official Public Docket & Verification Registry: `http://localhost:8090/verify?ref=...`            │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+<details>
+<summary><strong>View Interactive Mermaid Architecture Flowchart</strong> (GitHub / Mermaid Supported)</summary>
+
 ```mermaid
 flowchart TD
-    subgraph ClientLayer["Frontend Studio (Next.js 15 App Router • #F6F4EE Archival Editorial)"]
+    subgraph ClientLayer["Frontend Studio (Next.js 15 App Router - Port 3000)"]
         UI["Live System Telemetry Ribbon"]
         XRay["Interactive Cross-Document Phonetic X-Ray"]
-        Panels["4-Panel Pre-Flight Studio (A: Ingest, B: Phonetics, C: OpenCV, D: Playwright)"]
-        JudgeDrawer["Slide-Over Judge Audit Drawer & Proof-of-Zero-Mock Telemetry"]
+        Panels["5-Step Studio Workspace (Ingest, Phonetics, OpenCV, Affidavit, Portal)"]
+        JudgeDrawer["Slide-Over System Inspector and Audit Telemetry"]
     end
 
-    subgraph APILayer["FastAPI Core Engine (Port 8000 • Async Event Loop)"]
-        RouterIngest["POST /api/ingestion/upload\nPOST /api/ingestion/load-sample-packet"]
+    subgraph APILayer["FastAPI Core Engine (Async Loop - Port 8000)"]
+        RouterIngest["POST /api/ingestion/reconcile-session<br/>POST /api/ingestion/load-sample-packet"]
         RouterCompiler["POST /api/compiler/compile"]
         RouterVoice["POST /api/voice/explain"]
-        RouterExecution["GET /api/execution/stream/{id}\nPOST /api/execution/authorize-otp"]
-        RouterAudit["GET /api/audit/telemetry\nGET /api/audit/verify-zero-mock"]
+        RouterExecution["GET /api/execution/stream/:session_id<br/>POST /api/execution/authorize-otp"]
+        RouterAudit["GET /api/audit/telemetry<br/>GET /api/audit/verify-zero-mock"]
 
-        subgraph DeterministicEngines["Deterministic Verification &amp; Curing Engines"]
-            OCR["Local Optical OCR &amp; Layout Pipeline\n(OpenCV CLAHE + Tesseract + Verhoeff D5 Checksum)"]
-            Phonetic["Indic Phonetic Reconciler\n(indic-transliteration + Double Metaphone + Jaro-Winkler)"]
-            PostOffice["Live India Post LGD Validator\n(api.postalpincode.in + Canonical Local Fallback)"]
-            Compiler["OpenCV Adaptive Biometric Compiler\n(Haar Cascade + Stroke Contours + Binary Search KB)"]
-            Affidavit["Statutory Affidavit Synthesizer\n(ReportLab Bilingual PDF + Sovereign Seal)"]
-            RAG["Hybrid Statutory RAG Engine\n(BM25Okapi + Circular Clause Index)"]
+        subgraph DeterministicEngines["Deterministic Verification and Curing Engines"]
+            OCR["Local Optical OCR and Layout Pipeline<br/>(OpenCV CLAHE + Tesseract + Verhoeff D5 Checksum)"]
+            Phonetic["Indic Phonetic Reconciler<br/>(indic-transliteration + Double Metaphone + Jaro-Winkler)"]
+            PostOffice["Live India Post LGD Validator<br/>(api.postalpincode.in + Canonical Local Fallback)"]
+            Compiler["OpenCV Adaptive Biometric Compiler<br/>(Haar Cascade + Stroke Contours + Binary Search KB)"]
+            Affidavit["Statutory Affidavit Synthesizer<br/>(ReportLab Bilingual PDF + Sovereign Seal)"]
+            RAG["Hybrid Statutory RAG Engine<br/>(BM25Okapi + Circular Clause Index)"]
         end
 
-        subgraph FreeAI["100% Free AI &amp; Copilot Router"]
-            FreeRouter["4-Tier Fallback LLM Router\n(Groq Free • OpenRouter :free • Ollama • Deterministic Fallback)"]
-            EdgeTTS["Neural Audio Copilot\n(edge-tts hi-IN-Swara / en-IN-Neerja)"]
+        subgraph FreeAI["100% Keyless Free AI and Copilot Router"]
+            FreeRouter["4-Tier Fallback LLM Router<br/>(Groq Free, OpenRouter Free, Ollama, Deterministic Fallback)"]
+            EdgeTTS["Neural Audio Copilot<br/>(edge-tts hi-IN-Swara / en-IN-Neerja)"]
         end
 
-        subgraph Persistence["Storage &amp; Telemetry Layer"]
-            DB[("SQLite WAL / PostgreSQL\nAuditSessions • ExtractedDocs • CompiledAssets")]
-            AuditRing["In-Memory Judge Telemetry Ring Buffer\n(Latency Traces • PII Masking • SHA-256 Hashes)"]
+        subgraph Persistence["Storage and Telemetry Layer"]
+            DB[("SQLite WAL / PostgreSQL<br/>AuditSessions, ExtractedDocs, CompiledAssets")]
+            AuditRing["In-Memory Judge Telemetry Ring Buffer<br/>(Latency Traces, PII Masking, SHA-256 Hashes)"]
         end
     end
 
     subgraph TargetGov["Standalone Legacy e-District Target Server (Port 8090)"]
-        PortalForm["Multi-Step Demographics &amp; Document Upload Forms"]
-        ChaosEngine["Judge Chaos Toggle Engine\n(Injects HTTP 502 / 504 / DOM Selector Shifts)"]
-        OTPReceipt["Final Human-in-the-Loop OTP Authorization &amp; Receipt Stamping"]
+        PortalForm["Multi-Step Demographics and Document Upload Forms"]
+        ChaosEngine["Chaos Toggle Engine<br/>(Injects HTTP 502 / 504 / DOM Selector Shifts)"]
+        OTPReceipt["Final Human-in-the-Loop OTP Authorization and Receipt Stamping"]
     end
 
     UI --> RouterAudit
@@ -124,21 +175,56 @@ flowchart TD
 
     RouterExecution --> Agent["Playwright Bureaucracy Agent"]
     Agent --> PortalForm
-    ChaosEngine -.->|Injects 502 Bad Gateway| Agent
+    ChaosEngine -.->|Simulates 502 Chaos| Agent
     Agent --> OTPReceipt
 ```
+
+</details>
 
 ---
 
 ### 3.2 Self-Healing Playwright State Machine & Checkpoint Recovery
 
+```text
+[*] INIT PLAYWRIGHT CONTEXT
+       │
+       ▼
+[STEP 1: FILL DEMOGRAPHICS] ──► (Checkpoint 1 Saved: Name, Father, DOB, Gender)
+       │
+       ▼
+[STEP 2: UPLOAD BIOMETRIC ASSETS] ◄────────────────────────────────────────┐
+       │                                                                   │
+       ├──► [Attempt Submission]                                           │
+       │           │                                                       │
+       │           ▼                                                       │
+       │     HTTP 502 / 504 / DOM Chaos Injected                           │
+       │           │                                                       │
+       │           ▼                                                       │
+       │     [Rollback to Checkpoint 1] ──► [Re-locate DOM] ──► [Backoff] ─┘
+       │
+       ▼
+[CHECKPOINT 2 SAVED] (Compiled Photo ≤50KB, Signature ≤20KB, Affidavit Accepted)
+       │
+       ▼
+[STEP 3: STATUTORY OTP GATE] ──► Emit SSE: AWAITING_OTP ──► Citizen Enters SMS OTP
+       │
+       ▼
+[FINAL SUBMISSION & REGISTRY STAMP] ──► Application Reference Issued (UP-EDIST-2026-XXXX)
+       │
+       ▼
+[*] TERMINATE BROWSER SESSION
+```
+
+<details>
+<summary><strong>View Interactive Mermaid State Diagram</strong> (GitHub / Mermaid Supported)</summary>
+
 ```mermaid
 stateDiagram-v2
     [*] --> STEP0_INIT : Initialize Playwright Context
-    STEP0_INIT --> STEP1_FILL_DEMO : Inspect DOM & Accessibility Tree
+    STEP0_INIT --> STEP1_FILL_DEMO : Inspect DOM and Accessibility Tree
     STEP1_FILL_DEMO --> CHECKPOINT_1_SAVED : Applicant Name, Father Name, DOB, Gender
     
-    CHECKPOINT_1_SAVED --> STEP2_UPLOAD_DOCS : Advance to Biometric & Asset Uploads
+    CHECKPOINT_1_SAVED --> STEP2_UPLOAD_DOCS : Advance to Biometric and Asset Uploads
     
     state STEP2_UPLOAD_DOCS {
         [*] --> ATTEMPT_SUBMISSION
@@ -147,7 +233,7 @@ stateDiagram-v2
         ROLLBACK_CHECKPOINT --> RECONNECT_DOM : Re-locate Mutated Input Selectors
         RECONNECT_DOM --> EXPONENTIAL_BACKOFF : Wait (2^retry * 250ms)
         EXPONENTIAL_BACKOFF --> ATTEMPT_SUBMISSION : Retry with Compiled Assets
-        ATTEMPT_SUBMISSION --> UPLOAD_VERIFIED : Status 200 OK & Checksums Valid
+        ATTEMPT_SUBMISSION --> UPLOAD_VERIFIED : Status 200 OK and Checksums Valid
     }
     
     STEP2_UPLOAD_DOCS --> CHECKPOINT_2_SAVED : Compiled Photo, Signature, Affidavit Accepted
@@ -160,8 +246,10 @@ stateDiagram-v2
     }
     
     STEP3_OTP_GATE --> FINAL_RECEIPT : Official Stamped Filing Receipt Issued
-    FINAL_RECEIPT --> [*] : Close Context & Terminate Browser
+    FINAL_RECEIPT --> [*] : Close Context and Terminate Browser
 ```
+
+</details>
 
 ---
 
@@ -325,7 +413,7 @@ ZeroReject functions **100% free out-of-the-box with zero paid API keys**:
 ├── docs/
 │   ├── ARCHITECTURE.md                # System design & multi-agent pipeline documentation
 │   ├── TRADEOFFS_AND_QA.md            # Technical tradeoffs, failure modes, and judge FAQ
-│   └── assets/                        # Documentation vector assets (logo-banner.svg)
+│   └── assets/                        # Documentation vector mark (logo-mark.svg)
 │
 └── scripts/
     ├── generate_brand_assets.py       # Programmatic generator for SVG, ICO, and PNG brand assets

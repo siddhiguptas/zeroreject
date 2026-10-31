@@ -357,8 +357,7 @@ def main():
     # 1. Full Horizontal Logo Banner SVG
     banner_svg = generate_horizontal_logo_svg(800, 200)
     (WEB_PUBLIC_DIR / "logo.svg").write_text(banner_svg, encoding="utf-8")
-    (DOCS_ASSETS_DIR / "logo-banner.svg").write_text(banner_svg, encoding="utf-8")
-    print("  ✓ logo.svg & logo-banner.svg generated (800x200)")
+    print("  ✓ logo.svg generated (800x200)")
 
     # 2. Square Vector Seal (512x512)
     seal_svg = generate_seal_svg(512, standalone=True)
