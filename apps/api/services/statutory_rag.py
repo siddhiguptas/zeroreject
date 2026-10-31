@@ -11,6 +11,8 @@ STATUTORY_KNOWLEDGE_CORPUS: list[dict[str, Any]] = [
     {
         "id": "STAT_PASSPORT_ANNEX_E",
         "portal": "Passport Seva Kendra (Ministry of External Affairs)",
+        "issuing_authority": "Ministry of External Affairs, Government of India",
+        "effective_date": "23-12-2016",
         "statute": "Passport Rules 1980, Schedule III, Annexure 'E'",
         "title": "Deed Poll / Sworn Affidavit for Change / Discrepancy in Name",
         "clause": "Rule 4(b) - Minor variations in name (including addition of surname, expansion of initials, minor phonetic spelling differences) are curable through a self-declaration affidavit on non-judicial stamp paper without requiring a Gazette notification.",
@@ -20,6 +22,8 @@ STATUTORY_KNOWLEDGE_CORPUS: list[dict[str, Any]] = [
     {
         "id": "STAT_EPFO_JOINT_DECLARATION",
         "portal": "Employees' Provident Fund Organisation (EPFO)",
+        "issuing_authority": "Employees' Provident Fund Organisation, Ministry of Labour & Employment, Govt. of India",
+        "effective_date": "11-03-2024",
         "statute": "EPFO Circular No. WSU/2022/1/UIDAI/JointDeclaration/3221",
         "title": "Standard Operating Procedure (SOP) for Joint Declaration - Member Name & Father Correction",
         "clause": "Para 3.2 - Classification of Minor vs Major Name Change: Inversion of first and last name, insertion/expansion of middle initial, or phonetic correction without altering identity constitutes a MINOR correction, admissible with 2 supporting documents (PAN/Marksheet/Aadhaar) and employer co-sign.",
@@ -29,6 +33,8 @@ STATUTORY_KNOWLEDGE_CORPUS: list[dict[str, Any]] = [
     {
         "id": "STAT_EDISTRICT_UP_INCOME",
         "portal": "State e-District Portal (Revenue Department)",
+        "issuing_authority": "Department of Revenue, Government of Uttar Pradesh",
+        "effective_date": "15-06-2011",
         "statute": "UP Public Services (Reservation & Issuance of Certificates) Rules 2011",
         "title": "Income, Domicile & Caste Certificate Documentary Proof Matrix",
         "clause": "Section 6 - Where applicant name in family ration card or high school marksheet varies by initial or spelling from Aadhaar, a self-declaration affidavit affirming identity along with local Revenue Inspector (Lekhpal) verification is legally binding and acceptable for certificate issuance.",
@@ -38,6 +44,8 @@ STATUTORY_KNOWLEDGE_CORPUS: list[dict[str, Any]] = [
     {
         "id": "STAT_NSP_SCHOLARSHIP",
         "portal": "National Scholarship Portal (NSP MeitY)",
+        "issuing_authority": "Ministry of Electronics and Information Technology (MeitY), Government of India",
+        "effective_date": "16-01-2024",
         "statute": "MeitY NSP Standard Operational Guidelines 2024",
         "title": "Guidelines on Aadhaar Demographic Authentication & Bank Seeding",
         "clause": "Section 4.1 - In cases of minor demographic mismatch between student educational marksheet and Aadhaar details (such as token order inversion or initials), institute nodal officers (INO) are empowered to accept biometric verification coupled with an institution-attested declaration.",
@@ -47,6 +55,8 @@ STATUTORY_KNOWLEDGE_CORPUS: list[dict[str, Any]] = [
     {
         "id": "STAT_UIDAI_AADHAAR_UPDATE",
         "portal": "Unique Identification Authority of India (UIDAI)",
+        "issuing_authority": "Unique Identification Authority of India (UIDAI), Planning Commission / MeitY",
+        "effective_date": "12-09-2016",
         "statute": "Aadhaar (Enrolment and Update) Regulations 2016, Regulation 10",
         "title": "Valid Supporting Documents List for Proof of Identity (PoI) & Proof of Address (PoA)",
         "clause": "Schedule II - Recognized Proof of Identity includes PAN Card, Passport, and Educational Board Marksheet with photograph. Minor spelling variations up to 2 character phonemes do not require court order.",

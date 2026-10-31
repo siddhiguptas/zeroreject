@@ -22,9 +22,30 @@ export const PhoneticGraphMatrix: React.FC<PhoneticGraphMatrixProps> = ({
     if (playingLang) return;
     setPlayingLang(lang);
 
-    const promptText = lang === 'hi'
-      ? "पासपोर्ट सेवे अनेक्सुरे ई और ईपीएफओ नियमों के अनुसार नाम और पिता के नाम में इनिशियल्स की भिन्नता को शपथ पत्र द्वारा कैसे सुधारा जाता है?"
-      : "Explain how Passport Seva Annexure 'E' and EPFO Joint Declaration SOP allow initial expansions and name reconciliations via self-declaration.";
+    const nameA = reconciliation?.name_reconciliation?.original_a || '';
+    const nameB = reconciliation?.name_reconciliation?.original_b || '';
+    const applicantName = reconciliation?.name_reconciliation?.reconciled_canonical_name || nameA || nameB || 'Citizen';
+    const isInitial = reconciliation?.name_reconciliation?.initial_expansion_detected;
+    const isExact = nameA.toLowerCase().trim() === nameB.toLowerCase().trim() || (reconciliation?.rejection_risk_score ?? 100) === 0;
+
+    let promptText = '';
+    if (lang === 'hi') {
+      if (isExact) {
+        promptText = `आवेदक ${applicantName} के दस्तावेजों के सत्यापन और वैधानिक स्थिति का विवरण दें।`;
+      } else if (isInitial) {
+        promptText = `आवेदक ${applicantName} के आधार और अन्य पहचान पत्र में आद्याक्षर (initials) की भिन्नता पर विधिक विश्लेषण प्रस्तुत करें।`;
+      } else {
+        promptText = `आवेदक ${applicantName} के पहचान पत्रों में नाम और पते के सत्यापन पर विधिक विश्लेषण प्रस्तुत करें।`;
+      }
+    } else {
+      if (isExact) {
+        promptText = `Provide the statutory verification summary for applicant ${applicantName} across Aadhaar and secondary identity records.`;
+      } else if (isInitial) {
+        promptText = `Explain how Passport Seva Annexure 'E' and EPFO regulations resolve the initial expansion discrepancy for applicant ${applicantName}.`;
+      } else {
+        promptText = `Provide statutory legal analysis for applicant ${applicantName} cross-referencing primary and secondary documents.`;
+      }
+    }
 
     try {
       const res = await askVoiceCopilot(promptText, reconciliation?.session_id, lang);

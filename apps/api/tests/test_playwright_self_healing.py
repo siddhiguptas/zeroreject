@@ -16,6 +16,15 @@ def run_gov_server():
 
 @pytest.fixture(scope="module")
 def gov_portal_server():
+    import urllib.request
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:8090/") as r:
+            if r.status == 200:
+                yield "http://127.0.0.1:8090"
+                return
+    except Exception:
+        pass
+
     # Spin up standalone portal on test port 8099
     proc = multiprocessing.Process(target=run_gov_server, daemon=True)
     proc.start()

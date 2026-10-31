@@ -3,9 +3,18 @@ import time
 import uuid
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 
 app = FastAPI(title="State e-District & Citizen Services Portal", version="2026.1")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # In-memory session & chaos state
 portal_sessions = {}
@@ -62,6 +71,7 @@ PROFILE_ALIASES = {
     "epfo": "epfo_joint_declaration",
     "epfo_joint_decl": "epfo_joint_declaration",
     "epfo_joint_declaration": "epfo_joint_declaration",
+    "epfo_pension": "epfo_joint_declaration",
     "passport": "passport_seva",
     "passport_seva": "passport_seva"
 }
@@ -191,7 +201,7 @@ async def get_step1(request: Request, profile_name: str | None = None):
         <div class="grid grid-cols-2 gap-6">
             <div>
                 <label for="dob" class="block text-sm font-semibold text-gray-700 mb-1">Date of Birth (DD/MM/YYYY) *</label>
-                <input type="text" id="dob" name="dob" required pattern="[0-9]{{2}}/[0-9]{{2}}/[0-9]{{4}}"
+                <input type="text" id="dob" name="dob" required pattern="[0-9]{{2}}[/-][0-9]{{2}}[/-][0-9]{{4}}"
                        placeholder="14/08/1996"
                        class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-600 focus:outline-none">
             </div>
@@ -425,12 +435,15 @@ async def post_step3(
         )
 
     # Render Step 4: Human-in-the-Loop OTP Authorization Gate
-    otp_code = "719340"
+    import random
+    existing_otp = portal_sessions.get(gov_sess_id, {}).get("otp_expected")
+    otp_code = existing_otp or f"{random.randint(100000, 999999)}"
     if gov_sess_id in portal_sessions:
         portal_sessions[gov_sess_id]["otp_expected"] = otp_code
         portal_sessions[gov_sess_id]["uploads_received"] = True
 
-    applicant = portal_sessions.get(gov_sess_id, {}).get("applicant_name", "Ramesh Kumar Sharma")
+    applicant = portal_sessions.get(gov_sess_id, {}).get("applicant_name", "Citizen Applicant")
+    mobile_hint = portal_sessions.get(gov_sess_id, {}).get("mobile_hint", "4158")
 
     body = f"""
     <div id="otp-gate-container">
@@ -448,7 +461,7 @@ async def post_step3(
             <h3 class="font-bold text-amber-900 text-sm mb-1">Human-in-the-Loop OTP Authorization Gate</h3>
             <p class="text-xs text-amber-800 mb-3">
                 Per UIDAI and IT Act guidelines, automated agents must strictly pause for citizen consent.
-                One-Time Password (OTP) dispatched to citizen registered mobile (ending in ***3829).
+                One-Time Password (OTP) dispatched to citizen registered mobile (ending in ***{mobile_hint}).
             </p>
             <div class="bg-white p-3 border border-amber-200 rounded inline-block">
                 <span class="text-xs text-gray-500 font-mono">Aadhaar OTP Sandbox Dispatch:</span>
@@ -489,24 +502,38 @@ async def post_step3(
 async def finalize_submission(
     gov_sess_id: str = Form(...), citizen_otp: str = Form(...), citizen_consent: str | None = Form(None)
 ):
-    ack_number = f"UP-EDIST-2026-{uuid.uuid4().hex[:8].upper()}"
     session_data = portal_sessions.get(gov_sess_id, {})
-    applicant = session_data.get("applicant_name", "Ramesh Kumar Sharma")
     portal_key = session_data.get("portal_key", "e_district_income")
     profile = PORTAL_PROFILES.get(portal_key, PORTAL_PROFILES["e_district_income"])
+
+    prefix_map = {
+        "national_scholarship": "NSP-2026",
+        "epfo_joint_declaration": "EPFO-JD-2026",
+        "passport_seva": "MEA-PASS-2026",
+        "e_district_income": "UP-EDIST-2026"
+    }
+    prefix = prefix_map.get(portal_key, "UP-EDIST-2026")
+    ack_number = f"{prefix}-{uuid.uuid4().hex[:8].upper()}"
+
+    applicant = session_data.get("applicant_name", "Citizen Applicant")
+    father_val = session_data.get("father_name", "Father / Guardian")
+    dob_val = session_data.get("dob", "Not Recorded")
+    pin_val = session_data.get("pincode", "274204")
+    dist_val = session_data.get("district", "Deoria")
+    state_val = session_data.get("state", "Uttar Pradesh")
 
     # Persist in public registry for instant verification
     verified_dockets[ack_number] = {
         "ack_number": ack_number,
         "applicant_name": applicant,
-        "father_name": session_data.get("father_name", "Dina Nath Sharma"),
-        "dob": session_data.get("dob", "14/08/1996"),
+        "father_name": father_val,
+        "dob": dob_val,
         "service": profile.get("service_name", profile.get("title")),
         "dept": profile.get("dept", "State Government Administration"),
         "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "pincode": session_data.get("pincode", "206124"),
-        "district": session_data.get("district", "Etawah"),
-        "state": session_data.get("state", "Uttar Pradesh"),
+        "pincode": pin_val,
+        "district": dist_val,
+        "state": state_val,
         "status": "VERIFIED & REGISTERED IN STATE ARCHIVE",
         "sha256": hashlib.sha256(f"{ack_number}_{applicant}".encode()).hexdigest(),
         "cured_attachments": [
@@ -775,9 +802,20 @@ async def validate_portal_upload(
 
 # Chaos Toggle Endpoints for Judges
 @app.post("/api/chaos/toggle")
+@app.post("/toggle-chaos")
+@app.get("/toggle-chaos")
 async def toggle_chaos(request: Request):
-    data = await request.json() if request.headers.get("content-type") == "application/json" else {}
-    enable = data.get("enable")
+    enable = None
+    if request.headers.get("content-type") == "application/json":
+        try:
+            data = await request.json()
+            enable = data.get("enable")
+        except Exception:
+            pass
+    if enable is None:
+        q_enable = request.query_params.get("enable")
+        if q_enable is not None:
+            enable = q_enable.lower() in ("true", "1", "yes")
     if enable is None:
         chaos_state["enabled"] = not chaos_state["enabled"]
     else:

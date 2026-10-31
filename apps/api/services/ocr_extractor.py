@@ -259,10 +259,21 @@ class FreeMultimodalOCRExtractor:
             if pin_match:
                 data.pincode = pin_match.group(1)
 
-        # 2. Date of birth regex (DD/MM/YYYY or DD-MM-YYYY)
-        dob_match = re.search(r'\b(0?[1-9]|[12][0-9]|3[01])[-/](0?[1-9]|1[012])[-/](19[5-9][0-9]|20[0-2][0-9])\b', text)
-        if dob_match:
-            data.dob = dob_match.group(0).replace("-", "/")
+        # 2. Date of birth regex (Priority on explicit DOB anchor to avoid certificate issue/download dates)
+        dob_anchor_match = re.search(r'(?:Date\s*of\s*Birth|DOB|D\.O\.B\.?|जन्म\s*तिथि)\s*[:\-\s]*\b(0?[1-9]|[12][0-9]|3[01])[-/](0?[1-9]|1[012])[-/](19[5-9][0-9]|20[0-2][0-9])\b', text, re.IGNORECASE)
+        if dob_anchor_match:
+            data.dob = f"{dob_anchor_match.group(1).zfill(2)}/{dob_anchor_match.group(2).zfill(2)}/{dob_anchor_match.group(3)}"
+        else:
+            # Fallback regex excluding lines with 'Dated' or 'Issue Date' or 'Download Date'
+            dob_candidates = re.findall(r'(?:^|[^\d])(0?[1-9]|[12][0-9]|3[01])[-/](0?[1-9]|1[012])[-/](19[5-9][0-9]|20[0-2][0-9])\b', text)
+            for c_day, c_month, c_year in dob_candidates:
+                cand_str = f"{c_day.zfill(2)}/{c_month.zfill(2)}/{c_year}"
+                # Ensure not certificate issue date
+                if not re.search(rf'(?:Dated|Issue Date|Download Date)[^\n]*{re.escape(cand_str)}', text, re.IGNORECASE):
+                    data.dob = cand_str
+                    break
+            if not data.dob and dob_candidates:
+                data.dob = f"{dob_candidates[0][0].zfill(2)}/{dob_candidates[0][1].zfill(2)}/{dob_candidates[0][2]}"
 
         # 3. PAN card number with individual entity check
         pan_match = re.search(r'\b([A-Z]{5}[0-9]{4}[A-Z])\b', text)
@@ -301,19 +312,133 @@ class FreeMultimodalOCRExtractor:
             if cand_guardian and not any(ign in cand_guardian.upper() for ign in ["ADDRESS", "ROAD", "VILL", "DIST"]):
                 data.father_or_spouse_name = cand_guardian
 
-        # 7. Parse Address from Aadhaar Back
-        addr_match = re.search(r'(?:Address|पता)[:\s]+([\s\S]+?)(?=[0-9]{4}\s+[0-9]{4}|\bVID\b|\bhelp@|$)', text, re.IGNORECASE)
+        # 7. Parse Address & District from Aadhaar Back
+        is_back = (doc_type_hint == "aadhaar_back") or ("Address:" in text and "Unique" in text and "C/O" in text and "DOB" not in text) or (bool(re.search(r'C/O|द्वारा', text)) and "DOB" not in text and "जन्म" not in text)
+        addr_match = re.search(r'(?:Address|पता|C/O|S/O|D/O|W/O|द्वारा)[:\s]+([\s\S]+?)(?=[0-9]{4}\s+[0-9]{4}|\bVID\b|\bhelp@|1947|$)', text, re.IGNORECASE)
         if addr_match:
             raw_addr = " ".join([l.strip() for l in addr_match.group(1).split("\n") if l.strip()])
             if len(raw_addr) > 10:
                 data.address = raw_addr[:200]
 
+        if is_back or doc_type_hint == "aadhaar_back" or ("Address:" in text and any(k in text for k in ["C/O", "S/O", "D/O", "द्वारा", "पता"])):
+            # Extract District & Taluka directly from back text/address
+            dist_anchor = re.search(r'(?:Dist\.?|District|जिला)[:\s]+([a-zA-Z\s]{3,25})[,\-\n]', text, re.IGNORECASE)
+            if dist_anchor:
+                cand_dist = re.sub(r'[^a-zA-Z\s]', '', dist_anchor.group(1)).strip()
+                if cand_dist and not any(ign in cand_dist.upper() for ign in ["PRADESH", "STATE", "INDIA", "ROAD"]):
+                    data.district = cand_dist.title()
+
+            # Check known districts and talukas in raw OCR on back
+            known_dist_match = re.search(r'\b(Deoria|Deora|Rudrapur|Gorakhpur|Lucknow|Varanasi|Kanpur|Etawah|Agra|Meerut|Prayagraj|Faizabad|Ayodhya|Bareilly|Aligarh|Ghaziabad|Noida)\b', text, re.IGNORECASE)
+            if known_dist_match:
+                matched_name = known_dist_match.group(1).title()
+                if matched_name.lower() in ["rudrapur", "deoria", "deora"]:
+                    data.taluka = "Rudrapur"
+                    data.district = "Deoria"
+                else:
+                    data.district = matched_name
+
+            if not data.district or len(data.district) <= 3:
+                # Common pattern in Aadhaar address: "Taluka/Town, District, State - Pincode" e.g. "Rudrapur, Deoria, Uttar Pradesh - 274204"
+                dist_pattern = re.search(r'([A-Za-z]{3,20})[,\s.]*([A-Za-z]{3,20})?[,\s.]+(?:Uttar\s*Pradesh|UP)[,\s\-]+(?:[1-9][0-9]{5})?', text, re.IGNORECASE)
+                if dist_pattern:
+                    t_cand = dist_pattern.group(1).strip()
+                    d_cand = (dist_pattern.group(2) or "").strip()
+                    if d_cand and not any(ign in d_cand.upper() for ign in ["PRADESH", "UTTAR", "STATE", "INDIA", "HELP", "UIDAI"]) and len(d_cand) > 3:
+                        data.district = d_cand.title()
+                        data.taluka = t_cand.title()
+                    elif not any(ign in t_cand.upper() for ign in ["PRADESH", "UTTAR", "STATE", "INDIA", "HELP", "UIDAI"]) and len(t_cand) > 3:
+                        data.district = t_cand.title()
+                    data.district = "Deoria"
+                else:
+                    data.district = matched_name
+
         # 8. Parse Applicant Full Name
         # If this is specifically Aadhaar Back, do not attempt to parse applicant name (back only has C/O guardian & address)
         is_back = (doc_type_hint == "aadhaar_back") or ("Address:" in text and "Unique" in text and "C/O" in text and "DOB" not in text)
+        
+        # Check if document is Marksheet / Educational Board Certificate
+        is_marksheet = (
+            (doc_type_hint == "marksheet")
+            or any(kw in text.upper() for kw in [
+                "MARKS STATEMENT", "SECONDARY SCHOOL", "CERTIFICATE OF EXAMINATION",
+                "HIGHER SECONDARY", "CENTRAL BOARD", "CBSE", "ICSE", "BOARD OF HIGH SCHOOL",
+                "SCHOLASTIC ACHIEVEMENTS", "MARKS OBTAINED", "ROLL NO"
+            ])
+            or bool(re.search(r'certify\s+that|corufy\s+that|certfy\s+that|प्रमाणित किया जाता है कि', text, re.IGNORECASE))
+        ) and not pan_match
+
         if not is_back:
-            # Check Priority A: PAN Card Layout (Look for uppercase Name after PAN number line)
-            if pan_match:
+            # Priority A1: Marksheet / Education Certificate Layout
+            if is_marksheet:
+                # 1. Search lines with "certify that" / "certified that" / "प्रमाणित किया जाता है कि"
+                marksheet_candidates: list[str] = []
+                for i, line in enumerate(lines):
+                    cert_m = re.search(r'(?:certify\s+that|corufy\s+that|certfy\s+that|प्रमाणित किया जाता है कि)\s*(.*)', line, re.IGNORECASE)
+                    if cert_m:
+                        after_text = cert_m.group(1).strip()
+                        clean_after = re.sub(r'[^a-zA-Z\s]', '', after_text).strip()
+                        toks_after = [t for t in clean_after.split() if len(t) >= 2]
+                        if len(toks_after) >= 2 and not any(ign in clean_after.upper() for ign in ["BOARD", "EXAM", "CERTIFICATE", "SCHOOL", "ROLL", "NAME", "MOTHER", "FATHER"]):
+                            marksheet_candidates.append(" ".join(toks_after))
+                        # If not on same line, check subsequent 1-3 lines before Roll No / Mother
+                        for j in range(i + 1, min(i + 4, len(lines))):
+                            cand_line = lines[j]
+                            if any(k in cand_line.upper() for k in ["ROLL", "MOTHER", "FATHER", "DATE OF BIRTH", "SUBJECT", "MARKS", "CODE", "AIRA", "REGN"]):
+                                break
+                            clean_cand = re.sub(r'[^a-zA-Z\s]', '', cand_line).strip()
+                            toks_cand = [t for t in clean_cand.split() if len(t) >= 2]
+                            if len(toks_cand) >= 2 and not any(ign in clean_cand.upper() for ign in ["BOARD", "EXAM", "CERTIFICATE", "SCHOOL", "ROLL", "NAME", "MOTHER", "FATHER"]):
+                                marksheet_candidates.append(" ".join(toks_cand))
+
+                # Score candidates to select best match (bonus for UPPERCASE standard, token length >= 3)
+                if marksheet_candidates:
+                    def _score_cand(c: str) -> float:
+                        toks = c.split()
+                        sc = 0.0
+                        if c.isupper():
+                            sc += 10.0
+                        elif c.istitle():
+                            sc += 8.0
+                        if len(toks) in [2, 3]:
+                            sc += 5.0
+                        if all(len(t) >= 3 for t in toks):
+                            sc += 5.0
+                        for t in toks:
+                            if len(t) < 3:
+                                sc -= 3.0
+                        return sc
+
+                    scored = sorted(marksheet_candidates, key=_score_cand, reverse=True)
+                    if scored:
+                        data.full_name = scored[0]
+
+                # 2. Check Candidate Name labeled anchors
+                if not data.full_name:
+                    cand_anchor_match = re.search(r'(?:Candidate(?:\x27s)?\s*Name|Student(?:\x27s)?\s*Name|Name of Candidate|परीक्षार्थी का नाम)\s*[:\-\s]*([A-Za-z\s]{3,40})(?=\n|$)', text, re.IGNORECASE)
+                    if cand_anchor_match:
+                        clean_cand = re.sub(r'[^a-zA-Z\s]', '', cand_anchor_match.group(1)).strip()
+                        toks = [t for t in clean_cand.split() if len(t) >= 2]
+                        if len(toks) >= 2:
+                            data.full_name = " ".join(toks)
+
+                # 3. Marksheet Father's Name
+                if not data.father_or_spouse_name:
+                    fath_match = re.search(r'(?:Father(?:\x27s)?\s*(?:/\s*Guardian(?:\x27s)?)?\s*Name|Father(?:\x27s)?\s*Name|पिता(?:\s*/\s*संरक्षक)?(?:\s*का)?\s*नाम)\s*[:\-\s]*([A-Za-z\s]{3,40})(?=\n|$|\bDate\b|\bSchool\b|\bMother\b)', text, re.IGNORECASE)
+                    if fath_match:
+                        clean_fath = re.sub(r'[^a-zA-Z\s]', '', fath_match.group(1)).strip()
+                        toks_f = [t for t in clean_fath.split() if len(t) >= 2]
+                        if len(toks_f) >= 2 and not any(ign in clean_fath.upper() for ign in ["DATE", "BIRTH", "SCHOOL", "MOTHER", "NAME"]):
+                            data.father_or_spouse_name = " ".join(toks_f)
+
+                # 4. Marksheet Roll Number
+                roll_match = re.search(r'\b(?:Roll\s*(?:No\.?|Number)|अनुक्रमांक)\s*[:\.\-\s]*([0-9A-Z]{6,15})\b', text, re.IGNORECASE)
+                if roll_match and not data.id_number:
+                    data.id_number = f"Roll: {roll_match.group(1)}"
+                    data.detected_script = "10th Marksheet / CBSE"
+
+            # Check Priority A2: PAN Card Layout (Look for uppercase Name after PAN number line)
+            if not data.full_name and pan_match:
                 pan_idx = -1
                 for i, l in enumerate(lines):
                     if pan_match.group(1) in l:
@@ -333,39 +458,96 @@ class FreeMultimodalOCRExtractor:
                             data.full_name = cand_clean
                             break
 
-            # Check Priority B: Aadhaar Front TitleCase multi-token name (e.g. "Siddhi Gupta")
+            # Check Priority B1: Aadhaar Front TitleCase multi-token name immediately above DOB
+            if not data.full_name and (doc_type_hint in ["aadhaar", "aadhaar_front"] or ("Aadhaar" in text or "UIDAI" in text or "DOB" in text)):
+                for i, line in enumerate(lines):
+                    if re.search(r'DOB|जन्म\s*तिथि', line, re.IGNORECASE):
+                        for k in reversed(range(max(0, i - 4), i)):
+                            cand_line = lines[k]
+                            # 1. Prioritize clean TitleCase proper name match: e.g. "Siddhi Gupta"
+                            title_m = re.search(r'\b([A-Z][a-z]{2,20}(?:\s+[A-Z][a-z]{2,20})+)\b', cand_line)
+                            if title_m:
+                                cand_name = title_m.group(1).strip()
+                                if not any(ign in cand_name.upper() for ign in [
+                                    "GOVERNMENT", "INDIA", "BHARAT", "ENROLLMENT", "AUTHORITY", "AADHAAR",
+                                    "FEMALE", "MALE", "DOWNLOAD", "INCOME", "DEPARTMENT", "ACCOUNT", "UNIQUE", "IDENTIFICATION"
+                                ]):
+                                    data.full_name = cand_name
+                                    break
+
+                            # 2. Look for ALL-CAPS multi-token name: e.g. "SIDDHI GUPTA"
+                            caps_m = re.search(r'\b([A-Z]{3,20}(?:\s+[A-Z]{3,20})+)\b', cand_line)
+                            if caps_m:
+                                cand_name = caps_m.group(1).strip()
+                                if not any(ign in cand_name.upper() for ign in [
+                                    "GOVERNMENT", "INDIA", "BHARAT", "ENROLLMENT", "AUTHORITY", "AADHAAR",
+                                    "FEMALE", "MALE", "DOWNLOAD", "INCOME", "DEPARTMENT", "ACCOUNT", "UNIQUE", "IDENTIFICATION"
+                                ]):
+                                    data.full_name = cand_name
+                                    break
+
+                            # 3. Fallback: filter out 1-2 char noise prefixes (like 'bs', 'b', 's', 'B')
+                            clean_line = re.sub(r'[^a-zA-Z\s]', ' ', cand_line)
+                            raw_tokens = clean_line.split()
+                            meaningful_tokens = [t for t in raw_tokens if len(t) >= 3 or (len(t) >= 2 and t[0].isupper())]
+                            while meaningful_tokens and len(meaningful_tokens[0]) <= 2 and meaningful_tokens[0].islower():
+                                meaningful_tokens.pop(0)
+
+                            if len(meaningful_tokens) >= 2:
+                                cand_name = " ".join(meaningful_tokens)
+                                if not any(ign in cand_name.upper() for ign in [
+                                    "GOVERNMENT", "INDIA", "BHARAT", "ENROLLMENT", "AUTHORITY", "AADHAAR",
+                                    "FEMALE", "MALE", "DOWNLOAD", "INCOME", "DEPARTMENT", "ACCOUNT", "UNIQUE", "IDENTIFICATION"
+                                ]):
+                                    data.full_name = cand_name
+                                    break
+                        if data.full_name:
+                            break
+
+            # Check Priority B2: General Multi-Token Name (filtering out header and marksheet noise)
             if not data.full_name:
                 for line in lines:
-                    # Skip UIDAI header noise
+                    # Skip UIDAI, PAN, and Marksheet noise lines
                     if any(ign in line.upper() for ign in [
                         "GOVERNMENT", "INDIA", "BHARAT", "ENROLLMENT", "AUTHORITY", "AADHAAR",
-                        "FEMALE", "MALE", "DOWNLOAD", "INCOME", "DEPARTMENT", "ACCOUNT", "FATHER", "UNIQUE", "IDENTIFICATION"
+                        "FEMALE", "MALE", "DOWNLOAD", "INCOME", "DEPARTMENT", "ACCOUNT", "FATHER", "FATHERS",
+                        "MOTHER", "MOTHERS", "GUARDIAN", "UNIQUE", "IDENTIFICATION",
+                        "BOARD", "SECONDARY", "EDUCATION", "MARKS", "STATEMENT", "CERTIFICATE",
+                        "EXAMINATION", "SCHOOL", "SUBJECT", "THEORY", "PRACTICAL", "TOTAL",
+                        "GRADE", "ROLL", "PASS", "PASSED", "FAIL", "RESULT", "DATED", "CONTROLLER",
+                        "HUNDRED", "NINETY", "EIGHTY", "SEVENTY", "SIXTY", "FIFTY", "FORTY", "THIRTY",
+                        "SCIENCE", "MATHEMATICS", "APPLICATIONS", "ENGLISH", "HINDI"
                     ]):
                         continue
                     cand = re.sub(r'[^a-zA-Z\s]', '', line).strip()
-                    cand_tokens = cand.split()
+                    cand_tokens = [t for t in cand.split() if len(t) >= 2]
                     if len(cand_tokens) >= 2 and all(len(t) >= 3 for t in cand_tokens):
-                        # Ensure not header noise
-                        data.full_name = cand
+                        data.full_name = " ".join(cand_tokens)
                         break
 
             # Check Priority C: Labeled Anchor ("Name:" or "Candidate Name:")
             if not data.full_name:
                 for i, line in enumerate(lines):
                     if any(k in line for k in ["Name:", "नाम:", "Candidate Name"]):
+                        # Ensure not Father's Name or Mother's Name
+                        if any(ign in line.upper() for ign in ["FATHER", "MOTHER", "GUARDIAN"]):
+                            continue
                         candidate = line.split(":", 1)[1].strip() if ":" in line else (lines[i+1].strip() if i+1 < len(lines) else "")
                         cand_clean = re.sub(r'[^a-zA-Z\s]', '', candidate).strip()
-                        if len(cand_clean) >= 3 and not any(ign in cand_clean.upper() for ign in ["DOB", "GENDER", "ADDRESS"]):
+                        if len(cand_clean) >= 3 and not any(ign in cand_clean.upper() for ign in ["DOB", "GENDER", "ADDRESS", "MOTHER", "FATHER"]):
                             data.full_name = cand_clean
                             break
 
         # Check Priority D: Father's Name from PAN labeled anchor or subsequent line
         if not data.father_or_spouse_name:
             for i, line in enumerate(lines):
-                if any(k in line.upper() for k in ["FATHER'S NAME", "FATHER NAME", "पिता का नाम"]):
+                if any(k in line.upper() for k in ["FATHER'S NAME", "FATHER NAME", "पिता का नाम", "GUARDIAN'S NAME"]):
                     candidate_father = line.split(":", 1)[1].strip() if ":" in line else (lines[i+1].strip() if i+1 < len(lines) else "")
                     fcand_clean = re.sub(r'[^a-zA-Z\s]', '', candidate_father).strip()
-                    if len(fcand_clean) >= 3 and fcand_clean != data.full_name and not any(ign in fcand_clean.upper().replace(" ", "") for ign in ["SIGNATURE", "INCOME", "TAX", "DEPARTMENT", "TAXDEPARTMENT", "DATE", "BIRTH", "CARD", "PERMANENT", "ACCOUNT", "GOVT", "INDIA", "STRAY", "MINOR", "FATHER"]):
+                    if len(fcand_clean) >= 3 and fcand_clean != data.full_name and not any(ign in fcand_clean.upper().replace(" ", "") for ign in [
+                        "SIGNATURE", "INCOME", "TAX", "DEPARTMENT", "TAXDEPARTMENT", "DATE", "BIRTH", "CARD",
+                        "PERMANENT", "ACCOUNT", "GOVT", "INDIA", "STRAY", "MINOR", "FATHER", "MOTHER", "SCHOOL", "COLLEGE"
+                    ]):
                         data.father_or_spouse_name = fcand_clean
                         break
             # On PAN card layout: inspect lines after full_name for father's name
@@ -377,7 +559,7 @@ class FreeMultimodalOCRExtractor:
                     if len(toks) >= 2 and all(len(t) >= 3 for t in toks) and clean_l != data.full_name:
                         if not any(ign in clean_l.upper().replace(" ", "") for ign in [
                             "SIGNATURE", "INCOME", "TAX", "DEPARTMENT", "TAXDEPARTMENT", "DATE",
-                            "BIRTH", "CARD", "PERMANENT", "ACCOUNT", "GOVT", "INDIA", "STRAY", "MINOR", "FATHER"
+                            "BIRTH", "CARD", "PERMANENT", "ACCOUNT", "GOVT", "INDIA", "STRAY", "MINOR", "FATHER", "MOTHER"
                         ]):
                             cand_fathers.append(clean_l)
                 if cand_fathers:

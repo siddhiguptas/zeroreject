@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.core.config import settings
 from apps.api.core.database import get_db, init_db
-from apps.api.routers import compiler, execution, ingestion, judge_audit, voice
+from apps.api.routers import compiler, execution, ingestion, judge_audit, jurisdiction, voice
 
 
 @asynccontextmanager
@@ -36,6 +36,7 @@ app.include_router(ingestion.router)
 app.include_router(compiler.router)
 app.include_router(execution.router)
 app.include_router(judge_audit.router)
+app.include_router(jurisdiction.router)
 app.include_router(voice.router)
 
 @app.get("/health")

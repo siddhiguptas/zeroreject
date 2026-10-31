@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { FileCheck2, Download, Image as ImageIcon, Sparkles, Check, ArrowRight, Archive, SlidersHorizontal, AlertTriangle } from 'lucide-react';
-import { CompileAssetsResponse } from '@/types';
+import { FileCheck2, Download, Image as ImageIcon, Sparkles, Check, ArrowRight, Archive, SlidersHorizontal, AlertTriangle, FileEdit } from 'lucide-react';
+import { CompileAssetsResponse, CompiledAssetDetail } from '@/types';
 import { getPacketZipUrl } from '@/lib/api-client';
+import { SelfDeclarationEditorModal } from './SelfDeclarationEditorModal';
 
 interface OpenCVCurePreviewProps {
   compileData: CompileAssetsResponse | null;
@@ -21,6 +22,7 @@ export const OpenCVCurePreview: React.FC<OpenCVCurePreviewProps> = ({
   onProceedToExecution,
 }) => {
   const [showComparison, setShowComparison] = useState(false);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
   const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
   if (!compileData && !loading) {
@@ -52,8 +54,17 @@ export const OpenCVCurePreview: React.FC<OpenCVCurePreviewProps> = ({
   }
 
   const affidavitAsset = compileData?.assets.find((a) => a.asset_type === 'affidavit_pdf');
+  const portraitAsset = compileData?.assets.find((a) => a.asset_type === 'portrait');
+  const signatureAsset = compileData?.assets.find((a) => a.asset_type === 'signature');
   const affidavitDownloadUrl = affidavitAsset ? `${apiBase}${affidavitAsset.download_url}` : null;
   const zipDownloadUrl = sessionId ? getPacketZipUrl(sessionId) : '#';
+
+  const rawPortraitKb = portraitAsset?.telemetry?.initial_size_bytes
+    ? (portraitAsset.telemetry.initial_size_bytes / 1024).toFixed(1)
+    : '20.4';
+  const rawSigKb = signatureAsset?.telemetry?.initial_size_bytes
+    ? (signatureAsset.telemetry.initial_size_bytes / 1024).toFixed(1)
+    : '24.5';
 
   return (
     <div className="space-y-6">
@@ -93,14 +104,22 @@ export const OpenCVCurePreview: React.FC<OpenCVCurePreviewProps> = ({
           </span>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-white p-3 rounded border border-red-300 space-y-1">
-              <span className="text-red-700 font-bold block">Raw Phone Scan (Fatal Rejection ❌)</span>
-              <div className="text-[11px] text-gray-600">Portrait: 640×800 px, 312.4 KB (Exceeds 50 KB ceiling)</div>
-              <div className="text-[11px] text-gray-600">Signature: 500×300 px, 48.2 KB (Exceeds 20 KB ceiling)</div>
+              <span className="text-red-700 font-bold block">Raw Input Scan (Uncured Specs ❌)</span>
+              <div className="text-[11px] text-gray-600">
+                Portrait: {rawPortraitKb} KB (Unquantized camera/phone scan)
+              </div>
+              <div className="text-[11px] text-gray-600">
+                Signature: {rawSigKb} KB (Unprocessed ink scan)
+              </div>
             </div>
             <div className="bg-white p-3 rounded border border-emerald-300 space-y-1">
               <span className="text-emerald-700 font-bold block">OpenCV Cured (Portal Accepted ✓)</span>
-              <div className="text-[11px] text-gray-700 font-semibold">Portrait: 200×230 px, 150 DPI, 16.4 KB (&lt;= 50 KB)</div>
-              <div className="text-[11px] text-gray-700 font-semibold">Signature: 140×60 px, Grayscale, 13.8 KB (&lt;= 20 KB)</div>
+              <div className="text-[11px] text-gray-700 font-semibold">
+                Portrait: {portraitAsset?.width_px || 200}×{portraitAsset?.height_px || 230} px, 150 DPI, {portraitAsset?.file_size_kb || '12.9'} KB (12–48 KB window)
+              </div>
+              <div className="text-[11px] text-gray-700 font-semibold">
+                Signature: {signatureAsset?.width_px || 140}×{signatureAsset?.height_px || 60} px, Grayscale, {signatureAsset?.file_size_kb || '7.4'} KB (Strictly &lt; 20 KB)
+              </div>
             </div>
           </div>
         </div>
@@ -178,7 +197,16 @@ export const OpenCVCurePreview: React.FC<OpenCVCurePreviewProps> = ({
                   </div>
                 )}
 
-                <div className="pt-2 border-t border-[#DFDBD2]">
+                <div className="pt-2 border-t border-[#DFDBD2] space-y-1.5">
+                  {isPdf && (
+                    <button
+                      onClick={() => setIsEditorOpen(true)}
+                      className="w-full flex items-center justify-center space-x-1.5 bg-[#162A45] hover:bg-[#1f3a5e] text-white py-1.5 rounded text-xs font-semibold shadow-xs transition-colors"
+                    >
+                      <FileEdit className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Review &amp; Edit Draft</span>
+                    </button>
+                  )}
                   <a
                     href={downloadUrl}
                     target="_blank"
@@ -199,15 +227,24 @@ export const OpenCVCurePreview: React.FC<OpenCVCurePreviewProps> = ({
       <div className="bg-[#FAF8F5] border border-[#DFDBD2] p-4 rounded-xl flex flex-wrap items-center justify-between gap-3 shadow-xs">
         <div className="flex flex-wrap items-center gap-2">
           {affidavitDownloadUrl && (
-            <a
-              href={affidavitDownloadUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center space-x-1.5 bg-white hover:bg-[#F0EDE5] border border-[#DFDBD2] text-[#162A45] px-4 py-2 rounded text-xs font-mono font-semibold transition-colors"
-            >
-              <Download className="w-3.5 h-3.5 text-[#162A45]" />
-              <span>⬇ Download Statutory Affidavit (.PDF)</span>
-            </a>
+            <>
+              <button
+                onClick={() => setIsEditorOpen(true)}
+                className="flex items-center space-x-1.5 bg-[#162A45] hover:bg-[#1f3a5e] text-white px-4 py-2 rounded text-xs font-mono font-semibold transition-colors shadow-xs"
+              >
+                <FileEdit className="w-3.5 h-3.5 text-amber-300" />
+                <span>✏ Review &amp; Edit Self-Declaration Draft</span>
+              </button>
+              <a
+                href={affidavitDownloadUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center space-x-1.5 bg-white hover:bg-[#F0EDE5] border border-[#DFDBD2] text-[#162A45] px-4 py-2 rounded text-xs font-mono font-semibold transition-colors"
+              >
+                <Download className="w-3.5 h-3.5 text-[#162A45]" />
+                <span>⬇ Download Draft PDF</span>
+              </a>
+            </>
           )}
           <a
             href={zipDownloadUrl}
@@ -231,6 +268,13 @@ export const OpenCVCurePreview: React.FC<OpenCVCurePreviewProps> = ({
           </button>
         )}
       </div>
+
+      {/* Interactive Self-Declaration Draft Review & Edit Modal */}
+      <SelfDeclarationEditorModal
+        isOpen={isEditorOpen}
+        onClose={() => setIsEditorOpen(false)}
+        sessionId={sessionId}
+      />
     </div>
   );
 };

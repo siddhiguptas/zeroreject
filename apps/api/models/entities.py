@@ -52,6 +52,18 @@ class ExtractedDocument(Base):
 
     session = relationship("AuditSession", back_populates="documents")
 
+    @property
+    def district(self) -> str:
+        if isinstance(self.extraction_details, dict):
+            return self.extraction_details.get("district", "")
+        return ""
+
+    @property
+    def taluka(self) -> str:
+        if isinstance(self.extraction_details, dict):
+            return self.extraction_details.get("taluka", "")
+        return ""
+
 class ReconciliationRecord(Base):
     __tablename__ = "reconciliation_records"
 

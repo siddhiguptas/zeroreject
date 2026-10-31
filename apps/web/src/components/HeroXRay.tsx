@@ -17,9 +17,20 @@ export const HeroXRay: React.FC<HeroXRayProps> = ({ onScrollToStudio, onLaunchCh
     if (playingLang) return;
     setPlayingLang(lang);
 
-    const promptText = lang === 'hi'
-      ? "पासपोर्ट सेवे अनेक्सुरे ई और ईपीएफओ नियमों के अनुसार नाम और पिता के नाम में इनिशियल्स की भिन्नता को शपथ पत्र द्वारा कैसे सुधारा जाता है?"
-      : "Explain how Passport Seva Annexure 'E' and EPFO Joint Declaration SOP allow initial expansions and name reconciliations via self-declaration.";
+    let promptText = '';
+    if (activeTab === 'hindi_english') {
+      promptText = lang === 'hi'
+        ? "देवनागरी हिंदी और अंग्रेजी लिपि में नाम के लिप्यंतरण (transliteration) और ध्वन्यात्मक समानता (phonetic equivalence) पर विधिक विश्लेषण प्रदान करें।"
+        : "Explain how Indian statutory guidelines and IT Act transliteration protocols reconcile Devanagari Hindi and English Latin name spellings.";
+    } else if (activeTab === 'initial_expansion') {
+      promptText = lang === 'hi'
+        ? "पासपोर्ट सेवा अनुलग्नक 'ई' और ईपीएफओ संयुक्त घोषणा परिपत्र के अनुसार मध्य नाम के आद्याक्षर (Initial) के विस्तार की विधिक स्थिति समझाएं।"
+        : "Explain how Passport Seva Annexure 'E' Rule 4(b) and EPFO Joint Declaration SOP allow initial expansions and middle initial variations.";
+    } else {
+      promptText = lang === 'hi'
+        ? "माध्यमिक शिक्षा बोर्ड और छात्रवृत्ति पोर्टल में कुलनाम के क्रम परिवर्तन (Surname-First Inversion) की विधिक मान्यता का विवरण दें।"
+        : "Explain how Token-Sort invariance and National Scholarship Portal guidelines resolve surname-first name order inversions.";
+    }
 
     try {
       const res = await askVoiceCopilot(promptText, undefined, lang);

@@ -11,12 +11,14 @@ interface PlaywrightLiveConsoleProps {
   sessionId: string;
   workflowTarget?: string;
   onExecutionStateChange?: (status: 'IDLE' | 'EXECUTING' | 'HEALING' | 'AWAITING_OTP' | 'VERIFIED') => void;
+  onOtpDetected?: (otp: string) => void;
 }
 
 export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
   sessionId,
   workflowTarget,
   onExecutionStateChange,
+  onOtpDetected,
 }) => {
   const [chaosEnabled, setChaosEnabled] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -24,6 +26,7 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
   const [currentScreenshot, setCurrentScreenshot] = useState<string | null>(null);
   const [status, setStatus] = useState<'IDLE' | 'EXECUTING' | 'HEALING' | 'AWAITING_OTP' | 'VERIFIED'>('IDLE');
   const [otpCode, setOtpCode] = useState('');
+  const [detectedOtp, setDetectedOtp] = useState('');
   const [receiptAck, setReceiptAck] = useState<string | null>(null);
   const [isSubmittingOtp, setIsSubmittingOtp] = useState(false);
 
@@ -68,6 +71,12 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
           setStatus('AWAITING_OTP');
           onExecutionStateChange?.('AWAITING_OTP');
           setIsRunning(false);
+          const dynamicOtp = (event as any).otp_code;
+          if (dynamicOtp) {
+            setDetectedOtp(dynamicOtp);
+            setOtpCode(dynamicOtp);
+            onOtpDetected?.(dynamicOtp);
+          }
         } else if (event.status === 'SUBMITTED') {
           setStatus('VERIFIED');
           onExecutionStateChange?.('VERIFIED');
@@ -84,7 +93,7 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
   };
 
   const handleAuthorizeOtp = async () => {
-    const codeToSubmit = otpCode.trim() || '719340';
+    const codeToSubmit = otpCode.trim() || detectedOtp || '719340';
     if (!sessionId) return;
     setIsSubmittingOtp(true);
     try {
@@ -330,10 +339,10 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
               {/* Realistic SMS Sandbox Simulator Chip */}
               <button
                 type="button"
-                onClick={() => setOtpCode('719340')}
+                onClick={() => setOtpCode(detectedOtp || '719340')}
                 className="w-full text-left bg-[#0F172A] hover:bg-[#162A45] border border-amber-500/40 p-2 rounded text-[11px] font-mono text-amber-200 transition-colors flex items-center justify-between"
               >
-                <span>📱 SMS Dispatch Simulator (Local Sandbox): OTP is <strong>719340</strong></span>
+                <span>📱 SMS Dispatch Simulator (Local Sandbox): OTP is <strong>{detectedOtp || '719340'}</strong></span>
                 <span className="text-amber-400 font-bold underline text-[10px]">[ Auto-Fill OTP ]</span>
               </button>
 
@@ -341,7 +350,7 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
                 <input
                   type="text"
                   value={otpCode}
-                  placeholder="719340"
+                  placeholder={detectedOtp || '719340'}
                   onChange={(e) => setOtpCode(e.target.value)}
                   maxLength={6}
                   className="w-28 bg-[#0F172A] border border-slate-600 rounded px-2.5 py-1.5 text-center font-mono font-bold text-white text-sm tracking-widest focus:outline-none focus:border-amber-400"

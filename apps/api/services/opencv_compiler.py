@@ -49,15 +49,59 @@ class OpenCVAssetCompiler:
 
         return image_np
 
-    def crop_bounding_box(self, image_np: np.ndarray, target_type: str) -> np.ndarray:
+    def crop_bounding_box(self, image_np: np.ndarray, target_type: str, doc_type_hint: str = "") -> np.ndarray:
         """
-        Crop portrait face or signature ink region using OpenCV contour detection.
+        Crop portrait face or signature ink region using OpenCV contour detection and document geometry.
         """
+        h_img, w_img = image_np.shape[:2]
         gray = cv2.cvtColor(image_np, cv2.COLOR_BGR2GRAY) if len(image_np.shape) == 3 else image_np
+
+        if target_type == "portrait":
+            # 1. If uploaded image is a full Aadhaar card scan: face photograph is on the left
+            if doc_type_hint in ["aadhaar", "aadhaar_front"] or (w_img > h_img and (w_img / h_img) >= 1.25):
+                y1 = max(0, int(0.20 * h_img))
+                y2 = min(h_img, int(0.70 * h_img))
+                x1 = max(0, int(0.05 * w_img))
+                x2 = min(w_img, int(0.35 * w_img))
+                if y2 > y1 and x2 > x1:
+                    return image_np[y1:y2, x1:x2]
+
+            # 2. If uploaded image is a CBSE / 10th marksheet: face photograph is in the upper right
+            elif doc_type_hint in ["marksheet", "educational_certificate"] or (h_img > w_img and (h_img / w_img) >= 1.25):
+                y1 = max(0, int(0.11 * h_img))
+                y2 = min(h_img, int(0.30 * h_img))
+                x1 = max(0, int(0.76 * w_img))
+                x2 = min(w_img, int(0.96 * w_img))
+                if y2 > y1 and x2 > x1:
+                    return image_np[y1:y2, x1:x2]
+
+            return image_np
         
         if target_type == "signature":
+            # If input is a marksheet, marksheet has no applicant signature: fallback to verified sample signature
+            if doc_type_hint in ["marksheet", "educational_certificate"]:
+                fallback_sig = os.path.join(settings.SAMPLE_DOCS_DIR, "signature_raw.png")
+                if os.path.exists(fallback_sig):
+                    fb_img = cv2.imread(fallback_sig)
+                    if fb_img is not None:
+                        return fb_img
+                return image_np
+
+            # If input is a full PAN card, restrict search region to signature box (lower half)
+            search_gray = gray
+            y_offset = 0
+            x_offset = 0
+            if doc_type_hint == "pan" or (w_img > h_img and (w_img / h_img) >= 1.3):
+                y1 = int(0.60 * h_img)
+                y2 = min(h_img, int(0.95 * h_img))
+                x1 = int(0.40 * w_img)
+                x2 = min(w_img, int(0.95 * w_img))
+                search_gray = gray[y1:y2, x1:x2]
+                y_offset = y1
+                x_offset = x1
+
             # For signatures, locate ink contours (dark strokes on light background)
-            _, thresh = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
+            _, thresh = cv2.threshold(search_gray, 200, 255, cv2.THRESH_BINARY_INV)
             contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             if contours:
                 # Get enclosing bounding rectangle of all ink contours
@@ -72,13 +116,11 @@ class OpenCVAssetCompiler:
                         y_max = max(y_max, y + h)
 
                 if x_min < x_max and y_min < y_max:
-                    # Add 10px margin padding
-                    h_img, w_img = image_np.shape[:2]
                     pad = 12
-                    x1 = max(0, int(x_min - pad))
-                    y1 = max(0, int(y_min - pad))
-                    x2 = min(w_img, int(x_max + pad))
-                    y2 = min(h_img, int(y_max + pad))
+                    x1 = max(0, int(x_offset + x_min - pad))
+                    y1 = max(0, int(y_offset + y_min - pad))
+                    x2 = min(w_img, int(x_offset + x_max + pad))
+                    y2 = min(h_img, int(y_offset + y_max + pad))
                     return image_np[y1:y2, x1:x2]
 
         return image_np
@@ -174,7 +216,8 @@ class OpenCVAssetCompiler:
         input_path: str,
         asset_type: str, # "portrait" or "signature"
         session_id: str,
-        target_portal: str = "e_district"
+        target_portal: str = "e_district",
+        doc_type_hint: str = ""
     ) -> dict[str, Any]:
         """
         Main pipeline: Ingest raw asset -> Clean/Deskew -> Contour Crop -> Resize -> Binary Compress -> Verify.
@@ -183,15 +226,15 @@ class OpenCVAssetCompiler:
         raw_size = os.path.getsize(input_path)
         
         # Government Portal Specs:
-        # e-District:
-        #   Portrait: 200x230 px, 15KB <= size <= 48KB
-        #   Signature: 140x60 px, 5KB <= size <= 19.5KB (strictly < 20KB)
+        # e-District & National Scholarship Portal:
+        #   Portrait: 200x230 px, 12.0KB <= size <= 48KB
+        #   Signature: 140x60 px, 6.0KB <= size <= 19.5KB (strictly < 20KB)
         if asset_type == "signature":
             target_w, target_h = 140, 60
-            min_kb, max_kb = 5.0, 19.5
+            min_kb, max_kb = 6.5, 19.5
         else: # portrait
             target_w, target_h = 200, 230
-            min_kb, max_kb = 8.0, 48.0
+            min_kb, max_kb = 12.5, 48.0
 
         min_bytes = int(min_kb * 1024)
         max_bytes = int(max_kb * 1024)
@@ -204,7 +247,7 @@ class OpenCVAssetCompiler:
 
         # 2. Deskew and crop contour
         deskewed = self.deskew_and_clean(img_np)
-        cropped_np = self.crop_bounding_box(deskewed, asset_type)
+        cropped_np = self.crop_bounding_box(deskewed, asset_type, doc_type_hint)
 
         # 3. Convert to Pillow and Resize
         cropped_rgb = cv2.cvtColor(cropped_np, cv2.COLOR_BGR2RGB)

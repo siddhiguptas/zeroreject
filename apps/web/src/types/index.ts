@@ -7,6 +7,8 @@ export interface ExtractedFieldData {
   id_number: string;
   address: string;
   pincode: string;
+  district?: string;
+  taluka?: string;
   confidence: number;
   detected_script: string;
   raw_text: string;
@@ -161,4 +163,56 @@ export interface JudgeTelemetryResponse {
   recent_sql: Array<Record<string, any>>;
   active_sessions_count: number;
   free_ai_stack?: Record<string, string>;
+}
+
+export interface VerifiedCitation {
+  statute: string;
+  authority: string;
+  effective_date: string;
+  clause: string;
+  url: string;
+}
+
+export interface DocumentComparisonItem {
+  document_type: string;
+  name_recorded: string;
+  identifier_masked: string;
+  issuing_authority: string;
+  verification_status: string;
+}
+
+export interface DeclarationFieldDetails {
+  applicant_name: string;
+  relationship_type: string;
+  father_or_guardian_name: string;
+  dob: string;
+  age: number | string;
+  address: string;
+  pincode: string;
+  place: string;
+  date_str: string;
+  discrepancy_type: string;
+  discrepancy_description: string;
+  primary_doc: DocumentComparisonItem;
+  secondary_doc: DocumentComparisonItem;
+  declaration_paragraphs: string[];
+  verified_citations: VerifiedCitation[];
+  has_verified_citations: boolean;
+  no_citation_note: string;
+  disclaimer: string;
+  language: string;
+}
+
+export interface DeclarationDraftResponse {
+  session_id: string;
+  draft: DeclarationFieldDetails;
+  is_complete: boolean;
+  missing_fields: string[];
+}
+
+export interface GenerateDeclarationPdfRequest {
+  session_id: string;
+  custom_fields?: DeclarationFieldDetails;
+  language?: string;
+  place?: string;
 }

@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import os
+import re
 import time
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -81,11 +82,18 @@ class PlaywrightBureaucracyAgent:
                     "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
                 }
 
-                # Auto-fill Step 1 Demographic Form
+                # Auto-fill Step 1 Demographic Form with sanitization
+                raw_dob = applicant_data.get("dob") or "14/08/1996"
+                dob_m = re.search(r'(\d{2})[/-](\d{2})[/-](\d{4})', raw_dob)
+                clean_dob = f"{dob_m.group(1)}/{dob_m.group(2)}/{dob_m.group(3)}" if dob_m else "14/08/1996"
+
+                raw_gender = (applicant_data.get("gender") or "MALE").strip().upper()
+                clean_gender = "FEMALE" if "FEM" in raw_gender else ("OTHER" if "OTH" in raw_gender else "MALE")
+
                 await page.fill("#applicant_name", applicant_data.get("applicant_name", "Ramesh Kumar Sharma"))
                 await page.fill("#father_name", applicant_data.get("father_name", "Dina Nath Sharma"))
-                await page.fill("#dob", applicant_data.get("dob", "14/08/1996"))
-                await page.select_option("#gender", applicant_data.get("gender", "MALE"))
+                await page.fill("#dob", clean_dob)
+                await page.select_option("#gender", clean_gender)
 
                 shot1_filled = await self._capture_screenshot(page)
                 yield {
@@ -228,13 +236,17 @@ class PlaywrightBureaucracyAgent:
                 await page.wait_for_selector("#step4-otp-form", timeout=12000)
                 shot4_otp = await self._capture_screenshot(page)
 
+                otp_elem = await page.query_selector("#demo-otp-val")
+                otp_val = (await otp_elem.inner_text()).strip() if otp_elem else "719340"
+
                 # STEP 4: Human-in-the-Loop OTP Authorization Gate (PAUSE)
                 yield {
                     "step_index": 4,
                     "step_name": "HUMAN_IN_THE_LOOP_OTP_GATE",
                     "status": "AWAITING_OTP",
-                    "message": "HALTED AT CITIZEN CONSENT GATE: Per UIDAI & IT Act, citizen must authorize submission. Waiting for OTP input from UI...",
+                    "message": f"HALTED AT CITIZEN CONSENT GATE: Per UIDAI & IT Act, citizen must authorize submission. Generated sandbox OTP: {otp_val}. Waiting for citizen verification...",
                     "screenshot_base64": shot4_otp,
+                    "otp_code": otp_val,
                     "error_recovery_count": retry_count,
                     "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
                 }

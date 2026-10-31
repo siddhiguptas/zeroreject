@@ -49,7 +49,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
   const [playwrightStatus, setPlaywrightStatus] = useState<
     'IDLE' | 'EXECUTING' | 'HEALING' | 'AWAITING_OTP' | 'VERIFIED'
   >('IDLE');
-  const [otpCode, setOtpCode] = useState('719340');
+  const [otpCode, setOtpCode] = useState('');
   const [receiptAck, setReceiptAck] = useState<string | null>(null);
   const [isSubmittingOtp, setIsSubmittingOtp] = useState(false);
 
@@ -142,8 +142,8 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
   };
 
   const handleAuthorizeOtpStep5 = async () => {
-    const code = otpCode.trim() || '719340';
-    if (!sessionId) return;
+    const code = otpCode.trim();
+    if (!sessionId || !code) return;
     setIsSubmittingOtp(true);
     try {
       const res = await authorizeOtp(sessionId, code);
@@ -165,31 +165,30 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
   const isStep5Done = playwrightStatus === 'VERIFIED';
 
   return (
-    <section id="studio-workspace" className="py-12 px-4 max-w-7xl mx-auto space-y-8">
-      {/* Studio Header Ribbon */}
-      <div className="border-b border-[#DFDBD2] pb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <span className="text-xs font-mono font-semibold text-[#162A45] tracking-wider uppercase block">
-            End-to-End Sovereign Digital Bureaucracy Engine
-          </span>
-          <h2 className="font-serif text-3xl sm:text-4xl text-[#111625] font-normal tracking-tight">
-            ZeroReject Pre-Flight Studio
-          </h2>
-        </div>
-
-        {/* Workflow Target Selector with 3 Real-World Government Profiles */}
+    <div id="studio-workspace" className="space-y-6">
+      {/* Workflow Controls Bar */}
+      <div className="bg-white border border-[#DFDBD2] rounded-xl p-4 flex flex-wrap items-center justify-between gap-4 shadow-xs">
         <div className="flex items-center space-x-2">
-          <label htmlFor="workflow-select" className="text-xs font-mono text-[#525866]">Target Portal Profile:</label>
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span className="text-xs font-mono font-semibold text-[#162A45]">Target Government Portal:</span>
           <select
             id="workflow-select"
             value={workflowTarget}
             onChange={(e) => setWorkflowTarget(e.target.value)}
-            className="bg-white border border-[#DFDBD2] text-xs font-mono font-medium rounded px-3 py-1.5 focus:outline-none focus:border-[#162A45] text-[#111625]"
+            className="bg-[#FAF9F5] border border-[#DFDBD2] text-xs font-mono font-semibold rounded-lg px-3 py-1.5 focus:outline-none focus:border-[#162A45] text-[#111625]"
           >
-            <option value="e_district_income">Profile A: UP e-District (eSathi) — Income &amp; Domicile Certificate</option>
-            <option value="national_scholarship">Profile B: National Scholarship Portal (NSP 2.0 — MeitY)</option>
-            <option value="epfo_joint_decl">Profile C: EPFO Unified Portal — Joint Declaration SOP</option>
+            <option value="e_district_income">UP e-District (eSathi) — Income &amp; Domicile Certificate</option>
+            <option value="national_scholarship">National Scholarship Portal (NSP 2.0 — MeitY)</option>
+            <option value="epfo_joint_decl">EPFO Unified Portal — Joint Declaration SOP</option>
           </select>
+        </div>
+
+        <div className="flex items-center space-x-3 text-xs font-mono text-[#525866]">
+          {sessionId && (
+            <span className="bg-[#FAF9F5] border border-[#DFDBD2] px-2.5 py-1 rounded text-[11px]">
+              Session: <strong className="text-[#111625]">{sessionId.slice(0, 12)}...</strong>
+            </span>
+          )}
         </div>
       </div>
 
@@ -520,7 +519,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                           </div>
                           <div className="text-[9px] text-emerald-900 border-t border-emerald-200 pt-1 space-y-0.5">
                             <div>Name: <strong>{uploadedDocs['pan'].extracted_fields.full_name || 'Detected in Scan'}</strong></div>
-                            <div>PAN: <strong>{uploadedDocs['pan'].extracted_fields.id_number || 'PAN Matched'}</strong></div>
+                            <div>{uploadedDocs['pan'].extracted_fields.id_number?.startsWith('Roll') ? 'Roll No' : 'PAN / ID'}: <strong>{uploadedDocs['pan'].extracted_fields.id_number || 'Matched'}</strong></div>
                             <div>Father: <strong>{uploadedDocs['pan'].extracted_fields.father_or_spouse_name || 'Extracted'}</strong></div>
                           </div>
                           <span className="text-[8px] text-blue-700 underline block pt-0.5">Click to replace</span>
@@ -831,6 +830,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                 sessionId={sessionId}
                 workflowTarget={workflowTarget}
                 onExecutionStateChange={handleStatusChange}
+                onOtpDetected={(otp) => setOtpCode(otp)}
               />
 
               {/* Advance CTA to Step 5 */}
@@ -944,15 +944,22 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                       One-Time Password has been dispatched to citizen registered mobile number (+91-XXXXXX3829).
                     </p>
 
-                    {/* Simulated SMS Dispatch Chip */}
-                    <button
-                      type="button"
-                      onClick={() => setOtpCode('719340')}
-                      className="w-full text-left bg-white hover:bg-amber-100/50 border border-amber-400 p-3 rounded-lg text-xs font-mono text-amber-950 transition-colors flex flex-wrap items-center justify-between gap-2 shadow-xs"
-                    >
-                      <span>📱 Local Sandbox SMS Dispatch to <strong>+91-XXXXXX3829</strong>: OTP is <strong>719340</strong></span>
-                      <span className="text-[#B86B11] font-bold underline text-[11px]">[ Click to Fill 719340 ]</span>
-                    </button>
+                    {/* Dynamic Target Portal SMS Dispatch Chip */}
+                    {otpCode ? (
+                      <button
+                        type="button"
+                        onClick={() => setOtpCode(otpCode)}
+                        className="w-full text-left bg-emerald-50 hover:bg-emerald-100/60 border border-emerald-400 p-3 rounded-lg text-xs font-mono text-emerald-950 transition-colors flex flex-wrap items-center justify-between gap-2 shadow-xs"
+                      >
+                        <span>📱 Live Target Portal SMS Dispatch to <strong>+91-XXXXXX4158</strong>: OTP is <strong className="text-emerald-800 text-sm font-bold tracking-widest">{otpCode}</strong></span>
+                        <span className="text-emerald-700 font-bold underline text-[11px]">[ Prefilled from Sandbox Portal ✓ ]</span>
+                      </button>
+                    ) : (
+                      <div className="w-full text-left bg-white border border-amber-300 p-3 rounded-lg text-xs font-mono text-amber-900 flex flex-wrap items-center justify-between gap-2">
+                        <span>📱 Awaiting SMS Dispatch from Target Portal... (Run Step 4 Playwright Filing to generate live OTP)</span>
+                        <span className="text-gray-500 text-[11px]">(Or enter 6-digit portal OTP manually)</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* OTP Submission Box */}
@@ -967,7 +974,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                         value={otpCode}
                         onChange={(e) => setOtpCode(e.target.value)}
                         maxLength={6}
-                        placeholder="719340"
+                        placeholder={otpCode || "Enter 6-digit OTP"}
                         className="w-full bg-[#FAF8F5] border border-[#DFDBD2] rounded-lg px-4 py-2.5 text-center font-mono font-bold text-lg text-[#162A45] tracking-widest focus:outline-none focus:border-[#162A45]"
                       />
                     </div>
@@ -999,6 +1006,6 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
           </ErrorBoundary>
         )}
       </div>
-    </section>
+    </div>
   );
 };

@@ -13,6 +13,8 @@ class ExtractedFieldData(BaseModel):
     id_number: str = ""
     address: str = ""
     pincode: str = ""
+    district: str = ""
+    taluka: str = ""
     confidence: float = 1.0
     detected_script: str = "Devanagari/Latin"
     raw_text: str = ""
@@ -61,14 +63,17 @@ class PhoneticBreakdown(BaseModel):
 class PostalValidationResult(BaseModel):
     pincode: str
     valid: bool
-    taluka_or_subdistrict: str
-    district: str
-    state: str
-    post_offices: list[str]
-    latency_ms: float
-    is_cached: bool
+    taluka_or_subdistrict: str = ""
+    district: str = ""
+    state: str = ""
+    post_offices: list[str] = []
+    latency_ms: float = 0.0
+    is_cached: bool = False
     source: str = "Live India Post API"
     is_fallback: bool = False
+    status: str = "VERIFIED"  # "VERIFIED" | "NOT_FOUND" | "UNAVAILABLE" | "INVALID_PIN"
+    message: str = ""
+    verified_at: str = ""
 
 class ReconciliationResponse(BaseModel):
     session_id: str
@@ -152,4 +157,53 @@ class JudgeTelemetryResponse(BaseModel):
         "vector_rag": "Local BM25 Hybrid Retriever",
         "llm_mode": "Auto-Detect (Groq Free / Ollama / Deterministic Legal Compiler)"
     })
+
+# Self-Declaration / Affidavit Studio Schemas
+class VerifiedCitation(BaseModel):
+    statute: str
+    authority: str = "Government of India"
+    effective_date: str = ""
+    clause: str
+    url: str
+
+class DocumentComparisonItem(BaseModel):
+    document_type: str
+    name_recorded: str
+    identifier_masked: str
+    issuing_authority: str
+    verification_status: str
+
+class DeclarationFieldDetails(BaseModel):
+    applicant_name: str
+    relationship_type: str = "son/daughter/ward of"
+    father_or_guardian_name: str
+    dob: str
+    age: int | str = ""
+    address: str
+    pincode: str
+    place: str
+    date_str: str
+    discrepancy_type: str # INITIALS_EXPANSION, SPELLING_VARIATION, NAME_ORDER_INVERSION, PARENT_NAME_MISMATCH, EXACT_MATCH, RECORD_DIVERGENCE
+    discrepancy_description: str
+    primary_doc: DocumentComparisonItem
+    secondary_doc: DocumentComparisonItem
+    declaration_paragraphs: list[str]
+    verified_citations: list[VerifiedCitation] = Field(default_factory=list)
+    has_verified_citations: bool = True
+    no_citation_note: str = ""
+    disclaimer: str
+    language: str = "en" # "en" or "hi"
+
+class DeclarationDraftResponse(BaseModel):
+    session_id: str
+    draft: DeclarationFieldDetails
+    is_complete: bool
+    missing_fields: list[str]
+
+class GenerateDeclarationPdfRequest(BaseModel):
+    session_id: str
+    custom_fields: DeclarationFieldDetails | None = None
+    language: str = "en"
+    place: str | None = None
+
 

@@ -4,7 +4,10 @@ import {
   DocumentUploadResponse,
   CompileAssetsResponse,
   ExecutionStepEvent,
-  BenchmarkSimulationResponse
+  BenchmarkSimulationResponse,
+  DeclarationDraftResponse,
+  GenerateDeclarationPdfRequest,
+  CompiledAssetDetail
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -90,19 +93,35 @@ export async function authorizeOtp(
 }
 
 export async function toggleChaos(enable?: boolean): Promise<{ chaos_mode: boolean }> {
-  const res = await fetch(`${GOV_PORTAL_BASE}/api/chaos/toggle`, {
+  try {
+    const res = await fetch(`${GOV_PORTAL_BASE}/api/chaos/toggle`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(enable !== undefined ? { enable } : {}),
+    });
+    if (res.ok) return res.json();
+  } catch (e) {
+    // fallback to backend proxy
+  }
+  const res2 = await fetch(`${API_BASE}/api/execution/chaos/toggle`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(enable !== undefined ? { enable } : {}),
   });
-  if (!res.ok) throw new Error('Chaos toggle failed');
-  return res.json();
+  if (!res2.ok) throw new Error('Chaos toggle failed');
+  return res2.json();
 }
 
 export async function getChaosStatus(): Promise<{ enabled: boolean; failure_count: number }> {
-  const res = await fetch(`${GOV_PORTAL_BASE}/api/chaos/status`, { cache: 'no-store' });
-  if (!res.ok) return { enabled: false, failure_count: 0 };
-  return res.json();
+  try {
+    const res = await fetch(`${GOV_PORTAL_BASE}/api/chaos/status`, { cache: 'no-store' });
+    if (res.ok) return res.json();
+  } catch (e) {
+    // fallback to backend proxy
+  }
+  const res2 = await fetch(`${API_BASE}/api/execution/chaos/status`, { cache: 'no-store' });
+  if (!res2.ok) return { enabled: false, failure_count: 0 };
+  return res2.json();
 }
 
 export async function runBenchmarkSimulation(): Promise<BenchmarkSimulationResponse> {
@@ -120,6 +139,32 @@ export function getPacketZipUrl(sessionId: string): string {
 
 export function getReceiptPdfUrl(sessionId: string): string {
   return `${API_BASE}/api/execution/receipt/${sessionId}`;
+}
+
+export async function fetchDeclarationDraft(
+  sessionId: string,
+  language: string = 'en',
+  place?: string
+): Promise<DeclarationDraftResponse> {
+  const params = new URLSearchParams({ language });
+  if (place) params.append('place', place);
+  const res = await fetch(`${API_BASE}/api/compiler/declaration-draft/${sessionId}?${params.toString()}`, {
+    cache: 'no-store'
+  });
+  if (!res.ok) throw new Error(`Declaration draft fetch failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function generateCustomDeclarationPdf(
+  req: GenerateDeclarationPdfRequest
+): Promise<CompiledAssetDetail> {
+  const res = await fetch(`${API_BASE}/api/compiler/declaration-draft/generate-pdf`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) throw new Error(`Declaration PDF generation failed: ${res.statusText}`);
+  return res.json();
 }
 
 export async function askVoiceCopilot(
@@ -165,6 +210,10 @@ export function createExecutionEventSource(
         const data: ExecutionStepEvent = JSON.parse(e.data);
         onEvent(data);
         retryCount = 0; // reset retry counter on healthy message
+        if (data.status === 'AWAITING_OTP' || data.status === 'SUBMITTED' || data.status === 'FAILED') {
+          isClosedManually = true;
+          eventSource?.close();
+        }
       } catch (err) {
         console.error('Failed to parse SSE payload', err);
       }
@@ -193,5 +242,33 @@ export function createExecutionEventSource(
     isClosedManually = true;
     eventSource?.close();
   };
+}
+
+export interface JurisdictionVerifyResult {
+  pincode: string;
+  valid: boolean;
+  taluka_or_subdistrict: string;
+  district: string;
+  state: string;
+  post_offices: string[];
+  latency_ms: number;
+  is_cached: boolean;
+  source: string;
+  is_fallback: boolean;
+  status: 'VERIFIED' | 'MULTIPLE_MATCHES' | 'NOT_FOUND' | 'UNAVAILABLE' | 'INVALID_PIN';
+  message?: string;
+  verified_at?: string;
+}
+
+export async function verifyJurisdiction(pin: string): Promise<JurisdictionVerifyResult> {
+  const clean = pin.trim();
+  const res = await fetch(`${API_BASE}/api/jurisdiction/verify?pin=${encodeURIComponent(clean)}`, {
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody.detail || `Jurisdiction lookup failed (${res.status})`);
+  }
+  return res.json();
 }
 

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from apps.api.agents.playwright_executor import playwright_agent
 from apps.api.core.config import settings
 from apps.api.core.database import get_db
-from apps.api.models.entities import AuditSession, ReconciliationRecord
+from apps.api.models.entities import AuditSession, ExtractedDocument, ReconciliationRecord
 from apps.api.schemas.contracts import FinalSubmissionReceipt, OTPAuthorizationRequest
 from apps.api.services.affidavit_generator import affidavit_generator
 
@@ -40,18 +40,25 @@ async def stream_playwright_execution(
     recon_res = await db.execute(select(ReconciliationRecord).where(ReconciliationRecord.session_id == session_id))
     recon = recon_res.scalar_one_or_none()
 
-    phonetic_matrix = recon.phonetic_matrix if recon else {}
-    postal_details = recon.postal_details if recon else {}
+    docs_res = await db.execute(select(ExtractedDocument).where(ExtractedDocument.session_id == session_id))
+    docs = docs_res.scalars().all()
+
+    from apps.api.routers.compiler import resolve_session_demographics
+    demo = resolve_session_demographics(docs, recon)
+
+    aadhaar_front_doc = next((d for d in docs if d.doc_type in ["aadhaar_front", "aadhaar"]), None)
+    aadhaar_back_doc = next((d for d in docs if d.doc_type == "aadhaar_back"), None)
+    marksheet_doc = next((d for d in docs if d.doc_type in ["marksheet", "educational_certificate"]), None)
 
     applicant_data = {
-        "applicant_name": phonetic_matrix.get("original_a") or (recon.name_a if recon else "Ramesh Kumar Sharma"),
-        "father_name": phonetic_matrix.get("father_a") or (recon.father_a if recon else "Dina Nath Sharma"),
-        "dob": phonetic_matrix.get("dob_a") or (recon.dob_a if recon else "14/08/1996"),
-        "gender": phonetic_matrix.get("gender") or "MALE",
-        "address_line": phonetic_matrix.get("address") or "Vill. Primary Residence",
-        "pincode": postal_details.get("pincode") or (recon.pincode_query if recon else "206124"),
-        "district": postal_details.get("district") or (recon.district_verified if recon else "Etawah"),
-        "state": postal_details.get("state") or "Uttar Pradesh"
+        "applicant_name": demo.get("app_name_aadhaar") or (aadhaar_front_doc.full_name if aadhaar_front_doc else "Citizen Applicant"),
+        "father_name": demo.get("app_father") or "Father / Guardian",
+        "dob": demo.get("app_dob") or "28/09/2006",
+        "gender": (aadhaar_front_doc.gender if aadhaar_front_doc and aadhaar_front_doc.gender else (marksheet_doc.gender if marksheet_doc and marksheet_doc.gender else "FEMALE")),
+        "address_line": (aadhaar_back_doc.address if aadhaar_back_doc and aadhaar_back_doc.address else demo.get("app_address", "Primary Residence")),
+        "pincode": demo.get("app_pin") or "274204",
+        "district": demo.get("app_district") or "Deoria",
+        "state": "Uttar Pradesh"
     }
 
     asset_paths = {
@@ -61,6 +68,7 @@ async def stream_playwright_execution(
     }
 
     async def event_generator():
+        last_status = None
         try:
             async for event in playwright_agent.execute_portal_workflow(
                 session_id=session_id,
@@ -69,9 +77,17 @@ async def stream_playwright_execution(
                 asset_paths=asset_paths,
                 chaos_enabled=chaos_mode
             ):
+                last_status = event.get("status")
                 payload = json.dumps(event)
                 yield f"data: {payload}\n\n"
                 await asyncio.sleep(0.05)
+
+            # When execution halts at AWAITING_OTP, keep SSE connection open with heartbeat comments
+            # to avoid premature connection drop that triggers EventSource reconnect loops
+            if last_status == "AWAITING_OTP":
+                for _ in range(120): # 120 * 2.5s = 5 minutes idle wait for citizen OTP
+                    await asyncio.sleep(2.5)
+                    yield ": keep-alive\n\n"
         except asyncio.CancelledError:
             # Client disconnected early: terminate zombie browser context
             await playwright_agent.cleanup_context(session_id)
@@ -146,4 +162,28 @@ async def download_filing_receipt(
         media_type="application/pdf",
         filename=f"Official_Filing_Receipt_{session_id[:8]}.pdf"
     )
+
+
+@router.post("/chaos/toggle")
+async def toggle_chaos_mode(req: dict = None):
+    """Proxy chaos toggle to target portal on 8090."""
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.post(f"{settings.GOV_PORTAL_BASE_URL}/api/chaos/toggle", json=req or {})
+            return resp.json()
+    except Exception as e:
+        return {"chaos_mode": True, "error": str(e)}
+
+
+@router.get("/chaos/status")
+async def get_chaos_mode_status():
+    """Proxy chaos status to target portal on 8090."""
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(f"{settings.GOV_PORTAL_BASE_URL}/api/chaos/status")
+            return resp.json()
+    except Exception as e:
+        return {"enabled": False, "error": str(e)}
 

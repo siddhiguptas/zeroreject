@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Navbar } from "@/components/Navbar";
+import { Footer } from "@/components/Footer";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://zeroreject.gov.in";
 
@@ -166,7 +168,7 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdData) }}
         />
       </head>
-      <body className="min-h-screen bg-[#F6F4EE] text-[#111625] antialiased selection:bg-[#162A45] selection:text-white">
+      <body className="min-h-screen flex flex-col bg-[#F6F4EE] text-[#111625] antialiased selection:bg-[#162A45] selection:text-white">
         {/* Semantic Accessibility Landmark: Skip to Content */}
         <a
           href="#main-content"
@@ -174,9 +176,11 @@ export default function RootLayout({
         >
           Skip to main content
         </a>
-        <div id="main-content">
+        <Navbar />
+        <main id="main-content" className="flex-1">
           {children}
-        </div>
+        </main>
+        <Footer />
       </body>
     </html>
   );
