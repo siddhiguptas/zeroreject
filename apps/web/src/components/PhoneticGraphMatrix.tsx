@@ -1,15 +1,47 @@
 'use client';
 
-import React from 'react';
-import { ShieldCheck, AlertCircle, MapPin, CheckCircle2, BookOpen, Hash } from 'lucide-react';
+import React, { useState } from 'react';
+import { ShieldCheck, AlertCircle, MapPin, CheckCircle2, BookOpen, Hash, Volume2, ArrowRight } from 'lucide-react';
 import { ReconciliationResponse } from '@/types';
+import { askVoiceCopilot } from '@/lib/api-client';
 
 interface PhoneticGraphMatrixProps {
   reconciliation: ReconciliationResponse | null;
   loading: boolean;
+  onProceedToCure?: () => void;
 }
 
-export const PhoneticGraphMatrix: React.FC<PhoneticGraphMatrixProps> = ({ reconciliation, loading }) => {
+export const PhoneticGraphMatrix: React.FC<PhoneticGraphMatrixProps> = ({
+  reconciliation,
+  loading,
+  onProceedToCure,
+}) => {
+  const [playingLang, setPlayingLang] = useState<'hi' | 'en' | null>(null);
+
+  const handlePlayBriefing = async (lang: 'hi' | 'en') => {
+    if (playingLang) return;
+    setPlayingLang(lang);
+
+    const promptText = lang === 'hi'
+      ? "पासपोर्ट सेवे अनेक्सुरे ई और ईपीएफओ नियमों के अनुसार नाम और पिता के नाम में इनिशियल्स की भिन्नता को शपथ पत्र द्वारा कैसे सुधारा जाता है?"
+      : "Explain how Passport Seva Annexure 'E' and EPFO Joint Declaration SOP allow initial expansions and name reconciliations via self-declaration.";
+
+    try {
+      const res = await askVoiceCopilot(promptText, reconciliation?.session_id, lang);
+      if (res.audio_base64 && typeof window !== 'undefined') {
+        const audio = new Audio(`data:audio/mp3;base64,${res.audio_base64}`);
+        audio.onended = () => setPlayingLang(null);
+        audio.onerror = () => setPlayingLang(null);
+        await audio.play();
+      } else {
+        setPlayingLang(null);
+      }
+    } catch (e) {
+      console.warn('Statutory voice briefing playback failed', e);
+      setPlayingLang(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-8 text-center bg-white border border-[#DFDBD2] rounded-lg">
@@ -185,11 +217,48 @@ export const PhoneticGraphMatrix: React.FC<PhoneticGraphMatrixProps> = ({ reconc
       </div>
 
       {/* Statutory Legal Citations Box */}
-      <div className="bg-[#FAF8F5] border border-[#DFDBD2] rounded-lg p-4 space-y-2">
-        <div className="flex items-center space-x-2 text-xs font-bold font-mono text-[#162A45]">
-          <BookOpen className="w-4 h-4 text-[#162A45]" />
-          <span>STATUTORY GROUNDING & OFFICIAL CIRCULAR CITATIONS</span>
+      <div className="bg-[#FAF8F5] border border-[#DFDBD2] rounded-lg p-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#DFDBD2] pb-2">
+          <div className="flex items-center space-x-2 text-xs font-bold font-mono text-[#162A45]">
+            <BookOpen className="w-4 h-4 text-[#162A45]" />
+            <span>STATUTORY GROUNDING & OFFICIAL CIRCULAR CITATIONS</span>
+          </div>
+
+          <div className="flex items-center space-x-1.5">
+            <span className="text-[10px] font-mono text-[#525866] mr-1">Statutory Briefing:</span>
+            <button
+              onClick={() => handlePlayBriefing('hi')}
+              disabled={playingLang !== null}
+              className="flex items-center space-x-1 bg-[#162A45] hover:bg-[#1f3a5e] text-amber-200 px-2.5 py-1 rounded text-[11px] font-mono font-medium transition-colors"
+              title="Listen to statutory cure explanation in Hindi"
+            >
+              <Volume2 className={`w-3 h-3 ${playingLang === 'hi' ? 'text-emerald-400 animate-pulse' : ''}`} />
+              <span>{playingLang === 'hi' ? 'Speaking...' : '🔊 हिंदी'}</span>
+              {playingLang === 'hi' && (
+                <span className="inline-flex items-end space-x-0.5 h-2 w-2 ml-0.5">
+                  <span className="w-0.5 bg-emerald-400 animate-pulse h-full"></span>
+                  <span className="w-0.5 bg-emerald-400 animate-pulse h-1/2"></span>
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => handlePlayBriefing('en')}
+              disabled={playingLang !== null}
+              className="flex items-center space-x-1 bg-[#162A45] hover:bg-[#1f3a5e] text-amber-200 px-2.5 py-1 rounded text-[11px] font-mono font-medium transition-colors"
+              title="Listen to statutory cure explanation in English"
+            >
+              <Volume2 className={`w-3 h-3 ${playingLang === 'en' ? 'text-emerald-400 animate-pulse' : ''}`} />
+              <span>{playingLang === 'en' ? 'Speaking...' : '🔊 EN'}</span>
+              {playingLang === 'en' && (
+                <span className="inline-flex items-end space-x-0.5 h-2 w-2 ml-0.5">
+                  <span className="w-0.5 bg-emerald-400 animate-pulse h-full"></span>
+                  <span className="w-0.5 bg-emerald-400 animate-pulse h-1/2"></span>
+                </span>
+              )}
+            </button>
+          </div>
         </div>
+
         <div className="space-y-2 pt-1">
           {statutory_citations.map((cite, idx) => (
             <div key={idx} className="text-xs bg-white border border-[#DFDBD2] p-2.5 rounded">
@@ -199,6 +268,19 @@ export const PhoneticGraphMatrix: React.FC<PhoneticGraphMatrixProps> = ({ reconc
           ))}
         </div>
       </div>
+
+      {/* Guided Progression: Continue to Step C */}
+      {onProceedToCure && (
+        <div className="pt-3 border-t border-[#DFDBD2] flex justify-end">
+          <button
+            onClick={onProceedToCure}
+            className="flex items-center space-x-2 bg-[#162A45] hover:bg-[#1f3a5e] text-white px-5 py-2.5 rounded text-xs font-semibold shadow-sm transition-all"
+          >
+            <span>Continue to Step C: OpenCV Biometric Curing & Affidavit Synthesis</span>
+            <ArrowRight className="w-4 h-4 text-amber-300" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };

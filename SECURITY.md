@@ -45,3 +45,4 @@ If you discover a security vulnerability or PII exposure vector in ZeroReject, p
   - Patch release and security advisory publication within **7 business days**.
 
 Please do NOT report security vulnerabilities via public GitHub issues.
+

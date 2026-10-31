@@ -73,7 +73,7 @@ export const JudgeAuditDrawer: React.FC<JudgeAuditDrawerProps> = ({
               activeTab === 'free_ai_stack' ? 'bg-[#1C2538] text-emerald-300 font-bold border-b-2 border-b-emerald-400' : 'text-gray-400 hover:bg-[#182236]'
             }`}
           >
-            100% Free AI Stack
+            Sovereign Engine
           </button>
           <button
             onClick={() => setActiveTab('proof_zero_mock')}
@@ -108,18 +108,18 @@ export const JudgeAuditDrawer: React.FC<JudgeAuditDrawerProps> = ({
               <div className="bg-emerald-950/40 border border-emerald-800 p-3.5 rounded">
                 <div className="flex items-center space-x-2 text-emerald-400 font-bold mb-1">
                   <Sparkles className="w-4 h-4" />
-                  <span>100% KEYLESS, ZERO-CREDIT ARCHITECTURE</span>
+                  <span>100% ON-DEVICE PRIVACY &amp; SOVEREIGN LOCAL STACK</span>
                 </div>
                 <p className="text-[11px] text-gray-300 font-sans leading-relaxed">
-                  ZeroReject does NOT require paid Gemini API keys or OpenAI credits. Every AI, OCR,
-                  Vector Search, and Autonomous Agent task executes on 100% free local engines or free developer tiers.
+                  ZeroReject does NOT leak citizen PII to third-party cloud LLM endpoints. Every AI, OCR,
+                  Vector Search, and Autonomous Agent task executes on sovereign local engines with full deterministic precision.
                 </p>
               </div>
 
               {/* Free Engine Status Badges */}
               <div className="space-y-2.5">
                 <span className="text-gray-400 text-[11px] uppercase tracking-wider block">
-                  Active Free Subsystem Status:
+                  Active Sovereign Subsystem Status:
                 </span>
 
                 <div className="bg-[#161F30] p-3 rounded border border-gray-800 flex justify-between items-center">
@@ -128,7 +128,7 @@ export const JudgeAuditDrawer: React.FC<JudgeAuditDrawerProps> = ({
                     <span className="text-white font-bold">{freeStack.ocr_engine}</span>
                   </div>
                   <span className="text-[10px] bg-emerald-900/60 text-emerald-300 border border-emerald-700 px-2 py-0.5 rounded font-bold">
-                    $0 / LOCAL
+                    LOCAL / PRIVACY
                   </span>
                 </div>
 
@@ -154,11 +154,11 @@ export const JudgeAuditDrawer: React.FC<JudgeAuditDrawerProps> = ({
 
                 <div className="bg-[#161F30] p-3 rounded border border-gray-800 flex justify-between items-center">
                   <div>
-                    <span className="text-gray-400 block text-[10px]">REASONING & SYNTHESIS</span>
+                    <span className="text-gray-400 block text-[10px]">REASONING &amp; SYNTHESIS</span>
                     <span className="text-amber-300 font-bold">{freeStack.llm_mode}</span>
                   </div>
                   <span className="text-[10px] bg-amber-900/60 text-amber-300 border border-amber-700 px-2 py-0.5 rounded font-bold">
-                    ZERO KEY
+                    DETERMINISTIC GRAPH
                   </span>
                 </div>
               </div>

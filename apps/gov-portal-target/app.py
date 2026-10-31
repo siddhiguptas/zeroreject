@@ -13,9 +13,41 @@ app = FastAPI(title="State e-District & Citizen Services Portal", version="2026.
 portal_sessions = {}
 chaos_state = {"enabled": False, "failure_count": 0, "max_failures_before_recovery": 1}
 
+PORTAL_PROFILES = {
+    "e_district_income": {
+        "title": "State e-District Citizen Services Portal",
+        "header_title": "STATE e-DISTRICT CITIZEN SERVICES PORTAL",
+        "subtitle": "Department of Revenue & Public Grievances — Government of Uttar Pradesh",
+        "badge": "UP e-District 2.0",
+        "doc3_label": "Statutory Income & Domicile Self-Declaration (Annexure 'E' PDF) *"
+    },
+    "national_scholarship": {
+        "title": "National Scholarship Portal (NSP 2.0)",
+        "header_title": "NATIONAL SCHOLARSHIP PORTAL (NSP 2.0)",
+        "subtitle": "Ministry of Electronics & Information Technology (MeitY) — Government of India",
+        "badge": "NSP 2.0 Central Sector",
+        "doc3_label": "Academic Marksheet & Domicile Self-Declaration Affidavit (PDF) *"
+    },
+    "epfo_joint_declaration": {
+        "title": "EPFO Unified Member Portal — Joint Declaration",
+        "header_title": "EMPLOYEES' PROVIDENT FUND ORGANISATION (EPFO)",
+        "subtitle": "Member KYC Correction & Joint Declaration SOP — Ministry of Labour & Employment",
+        "badge": "EPFO Unified Portal",
+        "doc3_label": "Joint Declaration SOP Self-Affidavit (Form 13 / Annexure 'E') *"
+    },
+    "passport_seva": {
+        "title": "Passport Seva Portal — Document Advisor",
+        "header_title": "PASSPORT SEVA CITIZEN PORTAL",
+        "subtitle": "Consular, Passport & Visa (CPV) Division — Ministry of External Affairs",
+        "badge": "Passport Seva 2.0",
+        "doc3_label": "Statutory 'One-and-the-Same Person' Self-Declaration (Annexure 'E' PDF) *"
+    }
+}
+
 
 # HTML Template Helper
-def render_page(title: str, body_html: str, step: int = 1) -> str:
+def render_page(title: str, body_html: str, step: int = 1, portal_key: str = "e_district_income") -> str:
+    profile = PORTAL_PROFILES.get(portal_key, PORTAL_PROFILES["e_district_income"])
     steps_indicator = "".join(
         [
             f'<div class="flex-1 text-center py-2 border-b-4 {"border-blue-800 font-bold text-blue-900" if s == step else "border-gray-300 text-gray-500"}">Step {s}: {["Personal", "Address", "Uploads", "Verification"][s - 1]}</div>'
@@ -27,7 +59,7 @@ def render_page(title: str, body_html: str, step: int = 1) -> str:
     <html lang="en">
     <head>
         <meta charset="UTF-8">
-        <title>{title} — State e-District Portal</title>
+        <title>{title} — {profile['title']}</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <style>
             body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
@@ -40,20 +72,20 @@ def render_page(title: str, body_html: str, step: int = 1) -> str:
                 <div class="flex items-center space-x-3">
                     <div class="w-10 h-10 bg-amber-500 rounded-full flex items-center justify-center font-bold text-blue-950 text-xl border-2 border-white">GOV</div>
                     <div>
-                        <h1 class="font-bold text-lg leading-tight">STATE e-DISTRICT CITIZEN SERVICES PORTAL</h1>
-                        <p class="text-xs text-blue-200">Department of Revenue & Public Grievances — Government of Uttar Pradesh</p>
+                        <h1 class="font-bold text-lg leading-tight" id="portal-header-title">{profile['header_title']}</h1>
+                        <p class="text-xs text-blue-200" id="portal-header-subtitle">{profile['subtitle']}</p>
                     </div>
                 </div>
                 <div class="text-right text-xs text-blue-200">
                     <div>Session: Active</div>
-                    <div>Security: 256-Bit SSL</div>
+                    <div>Profile: <span class="text-amber-300 font-semibold">{profile['badge']}</span></div>
                 </div>
             </div>
         </header>
 
         <!-- Chaos Status Banner -->
         <div class="bg-amber-100 border-b border-amber-300 px-4 py-1.5 text-xs text-amber-900 flex justify-between items-center max-w-5xl mx-auto mt-2 rounded">
-            <span><strong>Target Mode B</strong>: Standalone Legacy Government Portal (Port 8090)</span>
+            <span><strong>Target Mode B</strong>: Standalone Public Governance Portal (Port 8090)</span>
             <span id="chaos-indicator">Chaos Mode: <strong>{"ACTIVE (Will Inject 502)" if chaos_state["enabled"] else "INACTIVE"}</strong></span>
         </div>
 
@@ -82,11 +114,13 @@ def render_page(title: str, body_html: str, step: int = 1) -> str:
 @app.get("/", response_class=HTMLResponse)
 @app.get("/step1", response_class=HTMLResponse)
 async def get_step1(request: Request):
-    body = """
+    portal_key = request.query_params.get("portal", "e_district_income")
+    body = f"""
     <h2 class="text-xl font-bold text-gray-800 mb-2">Step 1: Applicant Demographic Details</h2>
     <p class="text-sm text-gray-600 mb-6">Enter details exactly as inscribed on official supporting documentary proofs.</p>
 
     <form id="step1-form" action="/step1" method="POST" class="space-y-5">
+        <input type="hidden" name="portal_key" value="{portal_key}">
         <div class="grid grid-cols-2 gap-6">
             <div>
                 <label for="applicant_name" class="block text-sm font-semibold text-gray-700 mb-1">Full Name of Applicant *</label>
@@ -127,12 +161,16 @@ async def get_step1(request: Request):
         </div>
     </form>
     """
-    return HTMLResponse(content=render_page("Step 1 - Personal Details", body, step=1))
+    return HTMLResponse(content=render_page("Step 1 - Personal Details", body, step=1, portal_key=portal_key))
 
 
 @app.post("/step1", response_class=HTMLResponse)
 async def post_step1(
-    applicant_name: str = Form(...), father_name: str = Form(...), dob: str = Form(...), gender: str = Form(...)
+    applicant_name: str = Form(...),
+    father_name: str = Form(...),
+    dob: str = Form(...),
+    gender: str = Form(...),
+    portal_key: str = Form("e_district_income")
 ):
     gov_sess_id = str(uuid.uuid4())
     portal_sessions[gov_sess_id] = {
@@ -140,6 +178,7 @@ async def post_step1(
         "father_name": father_name,
         "dob": dob,
         "gender": gender,
+        "portal_key": portal_key
     }
 
     # Render Step 2
@@ -149,6 +188,7 @@ async def post_step1(
 
     <form id="step2-form" action="/step2" method="POST" class="space-y-5">
         <input type="hidden" name="gov_sess_id" value="{gov_sess_id}">
+        <input type="hidden" name="portal_key" value="{portal_key}">
         
         <div>
             <label for="address_line" class="block text-sm font-semibold text-gray-700 mb-1">Street / Village / Mohalla *</label>
@@ -186,7 +226,7 @@ async def post_step1(
         </div>
     </form>
     """
-    return HTMLResponse(content=render_page("Step 2 - Address Details", body, step=2))
+    return HTMLResponse(content=render_page("Step 2 - Address Details", body, step=2, portal_key=portal_key))
 
 
 @app.post("/step2", response_class=HTMLResponse)
@@ -197,10 +237,14 @@ async def post_step2(
     district: str = Form(...),
     state: str = Form(...),
 ):
+    portal_key = "e_district_income"
     if gov_sess_id in portal_sessions:
+        portal_key = portal_sessions[gov_sess_id].get("portal_key", "e_district_income")
         portal_sessions[gov_sess_id].update(
             {"address_line": address_line, "pincode": pincode, "district": district, "state": state}
         )
+
+    profile = PORTAL_PROFILES.get(portal_key, PORTAL_PROFILES["e_district_income"])
 
     # Render Step 3 (Uploads with strict specs)
     body = f"""
@@ -209,7 +253,7 @@ async def post_step2(
         <p class="font-bold text-sm">STRICT PORTAL FILE VALIDATION CONSTRAINTS (Rule 18-A):</p>
         <p>• <strong>Photograph</strong>: JPEG format, exactly 200x230 px, between 10 KB and 50 KB.</p>
         <p>• <strong>Applicant Signature</strong>: Grayscale, exactly 140x60 px, strictly <strong>under 20 KB</strong>.</p>
-        <p>• <strong>Supporting Affidavit / Proof</strong>: Merged PDF, strictly <strong>under 100 KB</strong>.</p>
+        <p>• <strong>Supporting Document</strong>: {profile['doc3_label']}</p>
     </div>
 
     <form id="step3-form" action="/step3" method="POST" enctype="multipart/form-data" class="space-y-6">
@@ -233,7 +277,7 @@ async def post_step2(
 
         <div>
             <label for="affidavit_file" class="block text-sm font-semibold text-gray-700 mb-1">
-                Statutory Annexure 'E' / Joint Declaration Affidavit (PDF under 100 KB) *
+                {profile['doc3_label']}
             </label>
             <input type="file" id="affidavit_file" name="affidavit_file" required accept=".pdf"
                    class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
@@ -247,7 +291,7 @@ async def post_step2(
         </div>
     </form>
     """
-    return HTMLResponse(content=render_page("Step 3 - Biometric Uploads", body, step=3))
+    return HTMLResponse(content=render_page("Step 3 - Biometric Uploads", body, step=3, portal_key=portal_key))
 
 
 @app.post("/step3", response_class=HTMLResponse)

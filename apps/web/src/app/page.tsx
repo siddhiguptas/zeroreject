@@ -12,8 +12,8 @@ export default function HomePage() {
   const [telemetry, setTelemetry] = useState<JudgeTelemetryResponse | null>(null);
   const [isAuditDrawerOpen, setIsAuditDrawerOpen] = useState(false);
   const [playwrightStatus, setPlaywrightStatus] = useState<
-    'READY' | 'EXECUTING' | 'HEALING' | 'PAUSED_OTP' | 'SUBMITTED'
-  >('READY');
+    'IDLE' | 'EXECUTING' | 'HEALING' | 'AWAITING_OTP' | 'VERIFIED'
+  >('IDLE');
 
   const loadTelemetry = async () => {
     try {
@@ -76,13 +76,13 @@ export default function HomePage() {
             <div>
               <span className="font-bold text-[#111625]">ZeroReject (PramaanFix)</span>
               <span className="mx-2 text-[#DFDBD2]">|</span>
-              <span>FORGE '26 GenAI Hackathon (Track 1: Civic Pulse &amp; Digital Governance)</span>
+              <span>Sovereign Pre-Flight Document Reconciliation &amp; Autonomous Bureaucracy Execution Engine</span>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-4">
-            <span>Deterministic Math: Double Metaphone + Jaro-Winkler</span>
-            <span>Vision: 100% Free OCR + OpenCV</span>
-            <span>Autonomous Agent: Playwright Self-Healing</span>
+            <span>Phonetic Graph: ISO-15919 + Double Metaphone</span>
+            <span>Biometric Compiler: OpenCV + Pillow</span>
+            <span>Execution: LangGraph + Playwright</span>
           </div>
         </div>
       </footer>

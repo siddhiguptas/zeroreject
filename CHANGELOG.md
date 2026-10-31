@@ -41,3 +41,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Real-time Telemetry Ribbon, Hero Cross-Document X-Ray, 4-Panel Studio Workspace, and Slide-Over Judge Audit Drawer.
   - Independent React Error Boundaries for each studio panel.
   - Full technical SEO metadata, OpenGraph cards, PWA manifest, dynamic sitemap, and Schema.org JSON-LD rich snippets.
+

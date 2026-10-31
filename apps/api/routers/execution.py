@@ -1,9 +1,10 @@
 import asyncio
 import json
 import time
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +13,7 @@ from apps.api.core.config import settings
 from apps.api.core.database import get_db
 from apps.api.models.entities import AuditSession
 from apps.api.schemas.contracts import FinalSubmissionReceipt, OTPAuthorizationRequest
+from apps.api.services.affidavit_generator import affidavit_generator
 
 router = APIRouter(prefix="/api/execution", tags=["Playwright Self-Healing Agent & SSE Stream"])
 
@@ -19,6 +21,7 @@ router = APIRouter(prefix="/api/execution", tags=["Playwright Self-Healing Agent
 async def stream_playwright_execution(
     session_id: str,
     chaos_mode: bool = Query(False),
+    portal: str | None = Query(None),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -30,8 +33,9 @@ async def stream_playwright_execution(
     sess_res = await db.execute(select(AuditSession).where(AuditSession.id == session_id))
     session = sess_res.scalar_one_or_none()
     
-    # Target portal URL (legacy portal on port 8090)
-    target_url = f"{settings.GOV_PORTAL_BASE_URL}/"
+    # Target portal URL synchronized with active portal profile
+    portal_type = portal or (session.workflow_target if session and session.workflow_target else "e_district_income")
+    target_url = f"{settings.GOV_PORTAL_BASE_URL}/?portal={portal_type}"
 
     applicant_data = {
         "applicant_name": "Ramesh Kumar Sharma",
@@ -107,5 +111,33 @@ async def authorize_otp(
         submission_timestamp=time.strftime("%d-%m-%Y %H:%M:%S UTC", time.gmtime()),
         receipt_pdf_url=f"/api/execution/receipt/{req.session_id}",
         filing_status="CONFIRMED_AND_STAMPED"
+    )
+
+
+@router.get("/receipt/{session_id}")
+async def download_filing_receipt(
+    session_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Download official generated stamped PDF receipt."""
+    sess_res = await db.execute(select(AuditSession).where(AuditSession.id == session_id))
+    session = sess_res.scalar_one_or_none()
+
+    portal_name = "STATE e-DISTRICT CITIZEN SERVICES PORTAL"
+    if session and session.workflow_target == "national_scholarship":
+        portal_name = "NATIONAL SCHOLARSHIP PORTAL (NSP 2.0)"
+    elif session and session.workflow_target == "epfo_joint_declaration":
+        portal_name = "EMPLOYEES' PROVIDENT FUND ORGANISATION (EPFO)"
+
+    ack_no = f"UP-EDIST-2026-{abs(hash(session_id)) % 900000 + 100000}"
+    pdf_path = affidavit_generator.generate_stamped_receipt(
+        session_id=session_id,
+        ack_number=ack_no,
+        portal_name=portal_name
+    )
+    return FileResponse(
+        path=pdf_path,
+        media_type="application/pdf",
+        filename=f"Official_Filing_Receipt_{session_id[:8]}.pdf"
     )
 

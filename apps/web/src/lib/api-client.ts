@@ -110,9 +110,11 @@ export function createExecutionEventSource(
   chaosMode: boolean,
   onEvent: (event: ExecutionStepEvent) => void,
   onError?: (err: any) => void,
-  autoReconnect: boolean = true
+  autoReconnect: boolean = true,
+  portal?: string
 ): () => void {
-  const url = `${API_BASE}/api/execution/stream/${sessionId}?chaos_mode=${chaosMode}`;
+  const portalParam = portal ? `&portal=${encodeURIComponent(portal)}` : '';
+  const url = `${API_BASE}/api/execution/stream/${sessionId}?chaos_mode=${chaosMode}${portalParam}`;
   let eventSource: EventSource | null = null;
   let retryCount = 0;
   let isClosedManually = false;

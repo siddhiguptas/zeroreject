@@ -9,6 +9,7 @@ interface OpenCVCurePreviewProps {
   loading: boolean;
   onTriggerCompile: () => void;
   sessionId: string;
+  onProceedToExecution?: () => void;
 }
 
 export const OpenCVCurePreview: React.FC<OpenCVCurePreviewProps> = ({
@@ -16,6 +17,7 @@ export const OpenCVCurePreview: React.FC<OpenCVCurePreviewProps> = ({
   loading,
   onTriggerCompile,
   sessionId,
+  onProceedToExecution,
 }) => {
   const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -155,6 +157,19 @@ export const OpenCVCurePreview: React.FC<OpenCVCurePreviewProps> = ({
           );
         })}
       </div>
+
+      {/* Guided Progression: Continue to Step D */}
+      {onProceedToExecution && (
+        <div className="pt-3 border-t border-[#DFDBD2] flex justify-end">
+          <button
+            onClick={onProceedToExecution}
+            className="flex items-center space-x-2 bg-[#162A45] hover:bg-[#1f3a5e] text-white px-5 py-2.5 rounded text-xs font-semibold shadow-sm transition-all"
+          >
+            <span>Continue to Step D: Playwright Self-Healing Agent</span>
+            <ArrowRight className="w-4 h-4 text-amber-300" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };

@@ -96,3 +96,4 @@ Before submitting a PR, ensure:
 - [ ] Magic-byte checks and upload bounds are preserved.
 - [ ] `README.md` and documentation are updated if API endpoints or schemas change.
 - [ ] No internal task trackers, audit scratch notes, or temporary files are committed to Git.
+
