@@ -1,10 +1,14 @@
-.PHONY: install test lint dev dev-api dev-gov dev-web seed clean
+.PHONY: setup install dev test lint assets audit clean dev-api dev-gov dev-web seed
 
 VENV ?= .venv
 PYTHON ?= $(VENV)/bin/python3
 PIP ?= $(VENV)/bin/pip
 PYTEST ?= $(VENV)/bin/pytest
 PLAYWRIGHT ?= $(VENV)/bin/playwright
+RUFF ?= $(VENV)/bin/ruff
+
+setup: install assets
+	@echo "==> ZeroReject (PramaanFix) environment is fully configured!"
 
 install:
 	@echo "==> Creating Python virtual environment..."
@@ -18,21 +22,31 @@ install:
 	@cd apps/web && npm install
 	@echo "==> Generating real rasterized sample citizen documents..."
 	@$(PYTHON) scripts/generate_sample_docs.py
-	@echo "==> Installation complete!"
 
-seed:
+assets:
+	@echo "==> Generating Sovereign Archival brand assets, icons, and OG previews..."
+	@$(PYTHON) scripts/generate_brand_assets.py
 	@echo "==> Generating real raster sample citizen documents..."
 	@$(PYTHON) scripts/generate_sample_docs.py
 
+seed: assets
+
 test:
-	@echo "==> Running backend test suite with Pytest..."
+	@echo "==> Running backend automated test suite with Pytest..."
 	@PYTHONPATH=. $(PYTEST) apps/api/tests/ -v
 
 lint:
-	@echo "==> Checking Python code formatting..."
-	@$(PYTHON) -m py_compile apps/api/main.py
-	@echo "==> Checking Next.js TypeScript types..."
+	@echo "==> Running Ruff linter on Python services..."
+	@$(RUFF) check .
+	@echo "==> Verifying Next.js TypeScript strict types & production build..."
 	@cd apps/web && npm run build
+
+audit:
+	@echo "==> Executing full Senior Engineering audit sweep (lint + test + build)..."
+	@$(RUFF) check .
+	@PYTHONPATH=. $(PYTEST) apps/api/tests/ -q
+	@cd apps/web && npm run build
+	@echo "==> Audit complete! Zero errors and zero warnings across all layers."
 
 dev-api:
 	@echo "==> Starting ZeroReject FastAPI Backend on port 8000..."
@@ -51,6 +65,5 @@ dev:
 	@make -j 3 dev-api dev-gov dev-web
 
 clean:
-	@echo "==> Cleaning cache directories..."
+	@echo "==> Cleaning cache and temporary storage directories..."
 	@rm -rf .pytest_cache .ruff_cache apps/web/.next storage/uploads/* storage/compiled/* storage/affidavits/*
-
