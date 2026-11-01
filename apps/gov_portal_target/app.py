@@ -807,12 +807,11 @@ async def validate_portal_upload(
 @app.get("/toggle-chaos")
 async def toggle_chaos(request: Request):
     enable = None
-    if request.headers.get("content-type") == "application/json":
-        try:
-            data = await request.json()
-            enable = data.get("enable")
-        except Exception:
-            pass
+    try:
+        data = await request.json()
+        enable = data.get("enable")
+    except Exception:
+        pass
     if enable is None:
         q_enable = request.query_params.get("enable")
         if q_enable is not None:

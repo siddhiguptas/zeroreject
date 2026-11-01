@@ -37,6 +37,17 @@ async def stream_playwright_execution(
     portal_type = portal or (session.workflow_target if session and session.workflow_target else "e_district_income")
     target_url = f"{settings.GOV_PORTAL_BASE_URL}/?portal={portal_type}"
 
+    # Explicitly synchronize chaos mode and reset failure counter on target portal (:8090)
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            await client.post(
+                f"{settings.GOV_PORTAL_BASE_URL}/api/chaos/toggle",
+                json={"enable": chaos_mode}
+            )
+    except Exception as e:
+        print(f"Failed to sync chaos toggle to 8090: {e}")
+
     recon_res = await db.execute(select(ReconciliationRecord).where(ReconciliationRecord.session_id == session_id))
     recon = recon_res.scalar_one_or_none()
 

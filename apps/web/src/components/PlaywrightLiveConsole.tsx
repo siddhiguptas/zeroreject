@@ -30,17 +30,23 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
   const [receiptAck, setReceiptAck] = useState<string | null>(null);
   const [isSubmittingOtp, setIsSubmittingOtp] = useState(false);
 
-  const logsEndRef = useRef<HTMLDivElement>(null);
+  const logContainerRef = useRef<HTMLDivElement>(null);
 
+  // Auto-scroll ONLY inside the log container element; NEVER scroll the window/page
   useEffect(() => {
-    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
   }, [events]);
 
   const handleToggleChaos = async () => {
+    const nextState = !chaosEnabled;
+    setChaosEnabled(nextState);
     try {
-      const nextState = !chaosEnabled;
       const res = await toggleChaos(nextState);
-      setChaosEnabled(res.chaos_mode);
+      if (res && typeof res.chaos_mode === 'boolean') {
+        setChaosEnabled(res.chaos_mode);
+      }
     } catch (e) {
       console.error('Failed to toggle chaos mode', e);
     }
@@ -291,7 +297,7 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
           </div>
 
           {/* Action Logs Box */}
-          <div className="flex-1 p-3 overflow-y-auto space-y-2.5 font-mono text-[11px] leading-relaxed text-slate-300">
+          <div ref={logContainerRef} className="flex-1 p-3 overflow-y-auto space-y-2.5 font-mono text-[11px] leading-relaxed text-slate-300">
             {events.length === 0 ? (
               <div className="text-slate-500 text-center py-24">
                 Awaiting agent execution events...
@@ -329,7 +335,6 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
                 );
               })
             )}
-            <div ref={logsEndRef} />
           </div>
 
           {/* State 3: Human-in-the-Loop OTP Consent Gate (ONLY displayed in AWAITING_OTP) */}
