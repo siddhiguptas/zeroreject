@@ -110,11 +110,11 @@ async def stream_playwright_execution(
             or ""
         )
 
-    app_state = (recon.postal_details.get("state") if recon and recon.postal_details else "") or ""
+    app_state = demo.get("app_state") or (recon.postal_details.get("state") if recon and recon.postal_details else "") or "Uttar Pradesh"
 
     app_address = (
-        (aadhaar_back_doc.address if aadhaar_back_doc and aadhaar_back_doc.address else None)
-        or demo.get("app_address")
+        demo.get("app_address")
+        or (aadhaar_back_doc.address if aadhaar_back_doc and aadhaar_back_doc.address else None)
         or (f"Dist. {app_district}, {app_state} - {app_pin}" if app_district and app_pin else "")
     )
 
@@ -126,7 +126,7 @@ async def stream_playwright_execution(
         "address_line": app_address,
         "pincode": app_pin,
         "district": app_district,
-        "state": "Uttar Pradesh"
+        "state": app_state
     }
 
     asset_paths = {
@@ -229,6 +229,7 @@ async def authorize_otp(
         app_dist = demo.get("app_district")
         if not app_dist or app_dist.startswith("["):
             app_dist = "Deoria"
+        app_state = demo.get("app_state") or "Uttar Pradesh"
 
         async with httpx.AsyncClient(timeout=2.0) as client:
             await client.post(
@@ -243,7 +244,7 @@ async def authorize_otp(
                     "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                     "pincode": app_pin,
                     "district": app_dist,
-                    "state": "Uttar Pradesh",
+                    "state": app_state,
                     "status": "VERIFIED & REGISTERED IN STATE ARCHIVE",
                     "sha256": hashlib.sha256(f"{ack}_{app_name}".encode()).hexdigest(),
                     "cured_attachments": [

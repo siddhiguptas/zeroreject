@@ -2,6 +2,7 @@ import asyncio
 import io
 import json
 import os
+import re
 import zipfile
 from datetime import datetime
 
@@ -79,22 +80,25 @@ def resolve_session_demographics(docs: list[ExtractedDocument], recon: Reconcili
         or "[DOB Not Recorded]"
     )
 
-    app_pin = (
-        user_corrections.get("pincode")
-        or postal_details.get("pincode")
-        or (recon.pincode_query if recon and recon.pincode_query else (aadhaar_back_doc.pincode if aadhaar_back_doc and aadhaar_back_doc.pincode else ""))
-    )
     app_district = (
         user_corrections.get("district")
+        or user_corrections.get("place")
         or postal_details.get("district")
         or (recon.district_verified if recon and recon.district_verified else (aadhaar_back_doc.district if aadhaar_back_doc and aadhaar_back_doc.district else None))
     )
 
     app_place = user_corrections.get("place") or app_district or "[Place of Execution / City]"
-    app_state = postal_details.get("state") or ""
+    app_state = user_corrections.get("state") or postal_details.get("state") or "Uttar Pradesh"
+
+    app_pin = (
+        user_corrections.get("pincode")
+        or postal_details.get("pincode")
+        or (recon.pincode_query if recon and recon.pincode_query else (aadhaar_back_doc.pincode if aadhaar_back_doc and aadhaar_back_doc.pincode else ""))
+    )
 
     app_address = (
         user_corrections.get("address")
+        or (aadhaar_back_doc.address if aadhaar_back_doc and aadhaar_back_doc.address else None)
         or phonetic_matrix.get("address")
         or (
             f"Dist. {app_district}, {app_state} - {app_pin}" if app_district and app_pin and app_state
@@ -156,6 +160,7 @@ def resolve_session_demographics(docs: list[ExtractedDocument], recon: Reconcili
         "app_dob": app_dob,
         "app_pin": app_pin,
         "app_district": app_district,
+        "app_state": app_state,
         "app_place": app_place,
         "app_address": app_address,
         "app_id_aadhaar": app_id_aadhaar,
@@ -451,6 +456,22 @@ async def generate_custom_declaration_pdf(
         uc["dob"] = dob
         uc["address"] = address
         uc["place"] = place
+        if place:
+            uc["district"] = place
+
+        # Check if address contains a 6-digit PIN
+        pin_match = re.search(r'\b([1-9][0-9]{5})\b', address)
+        if pin_match:
+            uc["pincode"] = pin_match.group(1)
+        else:
+            search_term = (place or address or "").lower().strip()
+            from apps.api.services.phonetic_reconciler import AUTHORITATIVE_POSTAL_DIRECTORY
+            for pin_code, (taluka, district, state, _pos) in AUTHORITATIVE_POSTAL_DIRECTORY.items():
+                if search_term == taluka.lower() or search_term == district.lower() or (len(search_term) >= 4 and taluka.lower() in search_term):
+                    uc["pincode"] = pin_code
+                    uc["district"] = district
+                    uc["state"] = state
+                    break
         pm["user_corrections"] = uc
         recon.phonetic_matrix = pm
         await db.commit()

@@ -174,3 +174,42 @@ def test_correct_demographics_flow_and_affidavit_synchronization():
     assert draft_res.status_code == 200
     draft = draft_res.json()
     assert draft["draft"]["father_or_guardian_name"] == "RAJ KUMAR GUPTA"
+
+    # User edits residential address and place to 'Rudrapur' in Step 3 affidavit modal
+    regen_res = client.post(
+        "/api/compiler/declaration-draft/generate-pdf",
+        json={
+            "session_id": session_id,
+            "place": "Rudrapur",
+            "custom_fields": {
+                **draft["draft"],
+                "father_or_guardian_name": "RAJ KUMAR GUPTA",
+                "place": "Rudrapur",
+                "address": "Rudrapur"
+            }
+        }
+    )
+    assert regen_res.status_code == 200
+
+    # Verify draft reflects edited address
+    updated_draft = client.get(f"/api/compiler/declaration-draft/{session_id}").json()
+    assert updated_draft["draft"]["address"] == "Rudrapur"
+    assert updated_draft["draft"]["place"] == "Rudrapur"
+
+    # Verify that resolve_session_demographics prioritizes edited address over raw Aadhaar back
+    from apps.api.routers.compiler import resolve_session_demographics
+    from sqlalchemy import select
+    from apps.api.models.entities import ExtractedDocument, ReconciliationRecord
+    from apps.api.core.database import AsyncSessionLocal
+    import asyncio
+
+    async def check_demo():
+        async with AsyncSessionLocal() as db:
+            docs = (await db.execute(select(ExtractedDocument).where(ExtractedDocument.session_id == session_id))).scalars().all()
+            recon = (await db.execute(select(ReconciliationRecord).where(ReconciliationRecord.session_id == session_id))).scalar_one_or_none()
+            return resolve_session_demographics(docs, recon)
+
+    demo = asyncio.run(check_demo())
+    assert demo["app_address"] == "Rudrapur"
+    assert demo["app_place"] == "Rudrapur"
+    assert "Rudrapur" in [demo["app_district"], demo["app_place"]]

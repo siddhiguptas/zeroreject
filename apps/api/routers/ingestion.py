@@ -622,7 +622,14 @@ async def correct_demographics(
     if recon_record and recon_record.phonetic_matrix:
         user_corrections = dict(recon_record.phonetic_matrix.get("user_corrections") or {})
 
-    user_corrections[req.field] = req.corrected_value.strip()
+    clean_val = req.corrected_value.strip()
+    user_corrections[req.field] = clean_val
+    if req.field == "place":
+        user_corrections["district"] = clean_val
+    elif req.field == "address":
+        pin_match = re.search(r'\b([1-9][0-9]{5})\b', clean_val)
+        if pin_match:
+            user_corrections["pincode"] = pin_match.group(1)
 
     return await execute_4gate_reconciliation(
         session_id=req.session_id,
