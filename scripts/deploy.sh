@@ -84,6 +84,14 @@ if [ "$IS_UBUNTU" = true ]; then
         curl \
         make >/dev/null 2>&1 || true
 
+    # Open OS firewall ports if UFW is active
+    if command -v ufw >/dev/null 2>&1; then
+        echo -e "${CYAN}==> Configuring host firewall (UFW) for ports 3000, 8001, 8090...${NC}"
+        run_sudo ufw allow 3000/tcp comment "ZeroReject Web UI" >/dev/null 2>&1 || true
+        run_sudo ufw allow 8001/tcp comment "ZeroReject FastAPI Backend" >/dev/null 2>&1 || true
+        run_sudo ufw allow 8090/tcp comment "ZeroReject Gov Target Portal" >/dev/null 2>&1 || true
+    fi
+
     # Check Node.js version (require >= 18)
     NODE_VERSION=0
     if command -v node >/dev/null 2>&1; then
@@ -122,7 +130,7 @@ sed -i.bak "s|^API_PORT=.*|API_PORT=8001|" .env 2>/dev/null || sed -i "" "s|^API
 sed -i.bak "s|^GOV_PORTAL_PORT=.*|GOV_PORTAL_PORT=8090|" .env 2>/dev/null || sed -i "" "s|^GOV_PORTAL_PORT=.*|GOV_PORTAL_PORT=8090|" .env
 sed -i.bak "s|^GOV_PORTAL_BASE_URL=.*|GOV_PORTAL_BASE_URL=http://localhost:8090|" .env 2>/dev/null || sed -i "" "s|^GOV_PORTAL_BASE_URL=.*|GOV_PORTAL_BASE_URL=http://localhost:8090|" .env
 sed -i.bak "s|^PLAYWRIGHT_HEADLESS=.*|PLAYWRIGHT_HEADLESS=true|" .env 2>/dev/null || sed -i "" "s|^PLAYWRIGHT_HEADLESS=.*|PLAYWRIGHT_HEADLESS=true|" .env
-sed -i.bak "s|^NEXT_PUBLIC_API_URL=.*|NEXT_PUBLIC_API_URL=http://${PUBLIC_IP}:8001|" .env 2>/dev/null || sed -i "" "s|^NEXT_PUBLIC_API_URL=.*|NEXT_PUBLIC_API_URL=http://${PUBLIC_IP}:8001|" .env
+sed -i.bak "s|^NEXT_PUBLIC_API_URL=.*|NEXT_PUBLIC_API_URL=|" .env 2>/dev/null || sed -i "" "s|^NEXT_PUBLIC_API_URL=.*|NEXT_PUBLIC_API_URL=|" .env
 sed -i.bak "s|^NEXT_PUBLIC_GOV_PORTAL_URL=.*|NEXT_PUBLIC_GOV_PORTAL_URL=http://${PUBLIC_IP}:8090|" .env 2>/dev/null || sed -i "" "s|^NEXT_PUBLIC_GOV_PORTAL_URL=.*|NEXT_PUBLIC_GOV_PORTAL_URL=http://${PUBLIC_IP}:8090|" .env
 rm -f .env.bak
 
@@ -152,7 +160,7 @@ echo -e "${CYAN}==> Generating Sovereign Assets & Sample Documents...${NC}"
 echo -e "${CYAN}==> Installing Web UI dependencies and building Next.js production bundle...${NC}"
 mkdir -p storage/logs storage/run storage/uploads storage/compiled storage/affidavits
 cd apps/web
-export NEXT_PUBLIC_API_URL="http://${PUBLIC_IP}:8001"
+export NEXT_PUBLIC_API_URL=""
 export NEXT_PUBLIC_GOV_PORTAL_URL="http://${PUBLIC_IP}:8090"
 export NODE_OPTIONS="--max-old-space-size=2048"
 npm install --silent

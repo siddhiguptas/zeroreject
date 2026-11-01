@@ -1,11 +1,20 @@
+import asyncio
 import io
 import pytest
 from starlette.testclient import TestClient
 from PIL import Image, ImageDraw
 
+from apps.api.core.database import init_db
 from apps.api.main import app
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True, scope="module")
+def setup_module_database():
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(init_db())
+    loop.close()
 
 
 def create_synthetic_doc_img(lines):

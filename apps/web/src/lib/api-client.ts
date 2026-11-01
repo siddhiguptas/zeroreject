@@ -11,7 +11,7 @@ import {
   FinalSubmissionReceipt
 } from '@/types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL !== undefined ? process.env.NEXT_PUBLIC_API_URL : '';
 const GOV_PORTAL_BASE = process.env.NEXT_PUBLIC_GOV_PORTAL_URL || 'http://localhost:8090';
 
 export async function fetchTelemetry(): Promise<JudgeTelemetryResponse> {

@@ -54,7 +54,7 @@ export const SelfDeclarationEditorModal: React.FC<SelfDeclarationEditorModalProp
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+  const apiBase = process.env.NEXT_PUBLIC_API_URL !== undefined ? process.env.NEXT_PUBLIC_API_URL : '';
 
   useEffect(() => {
     if (isOpen && sessionId) {

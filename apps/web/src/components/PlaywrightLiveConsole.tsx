@@ -5,7 +5,7 @@ import { Play, RotateCcw, AlertTriangle, AlertCircle, ShieldCheck, Terminal, Che
 import { ExecutionStepEvent } from '@/types';
 import { createExecutionEventSource, toggleChaos, authorizeOtp } from '@/lib/api-client';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL !== undefined ? process.env.NEXT_PUBLIC_API_URL : '';
 
 interface PlaywrightLiveConsoleProps {
   sessionId: string;

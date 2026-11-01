@@ -24,7 +24,7 @@ export const OpenCVCurePreview: React.FC<OpenCVCurePreviewProps> = ({
   const [showComparison, setShowComparison] = useState(false);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [customAffidavitAsset, setCustomAffidavitAsset] = useState<CompiledAssetDetail | null>(null);
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001';
+  const apiBase = process.env.NEXT_PUBLIC_API_URL !== undefined ? process.env.NEXT_PUBLIC_API_URL : '';
 
   if (!compileData && !loading) {
     return (
