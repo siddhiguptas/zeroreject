@@ -40,6 +40,7 @@ router = APIRouter(prefix="/api/compiler", tags=["OpenCV Asset Compiler & Affida
 def resolve_session_demographics(docs: list[ExtractedDocument], recon: ReconciliationRecord | None) -> dict:
     phonetic_matrix = recon.phonetic_matrix if recon else {}
     postal_details = recon.postal_details if recon else {}
+    user_corrections = phonetic_matrix.get("user_corrections") or {}
 
     aadhaar_front_doc = next((d for d in docs if d.doc_type in ["aadhaar_front", "aadhaar"]), None)
     aadhaar_back_doc = next((d for d in docs if d.doc_type == "aadhaar_back"), None)
@@ -47,12 +48,21 @@ def resolve_session_demographics(docs: list[ExtractedDocument], recon: Reconcili
     marksheet_doc = next((d for d in docs if d.doc_type in ["marksheet", "educational_certificate"]), None)
     sec_candidate = pan_doc or marksheet_doc or next((d for d in docs if d.doc_type not in ["portrait", "signature", "aadhaar_front", "aadhaar", "aadhaar_back"]), None)
 
-    app_name_aadhaar = phonetic_matrix.get("original_a") or (recon.name_a if recon and recon.name_a else (aadhaar_front_doc.full_name if aadhaar_front_doc and aadhaar_front_doc.full_name else "[Applicant Name Not Recorded]"))
+    app_name_aadhaar = (
+        user_corrections.get("applicant_name")
+        or phonetic_matrix.get("original_a")
+        or (recon.name_a if recon and recon.name_a else (aadhaar_front_doc.full_name if aadhaar_front_doc and aadhaar_front_doc.full_name else "[Applicant Name Not Recorded]"))
+    )
     sec_name_val = sec_candidate.full_name if sec_candidate and sec_candidate.full_name else None
-    app_name_sec = phonetic_matrix.get("original_b") or (recon.name_b if recon and recon.name_b else (sec_name_val or app_name_aadhaar))
+    app_name_sec = (
+        user_corrections.get("secondary_name")
+        or phonetic_matrix.get("original_b")
+        or (recon.name_b if recon and recon.name_b else (sec_name_val or app_name_aadhaar))
+    )
 
     app_father = (
-        phonetic_matrix.get("father_a")
+        user_corrections.get("father_name")
+        or phonetic_matrix.get("father_a")
         or (recon.father_a if recon and recon.father_a else None)
         or (aadhaar_back_doc.father_or_spouse_name if aadhaar_back_doc and aadhaar_back_doc.father_or_spouse_name else None)
         or (marksheet_doc.father_or_spouse_name if marksheet_doc and marksheet_doc.father_or_spouse_name else None)
@@ -61,23 +71,36 @@ def resolve_session_demographics(docs: list[ExtractedDocument], recon: Reconcili
     )
 
     app_dob = (
-        phonetic_matrix.get("dob_a")
+        user_corrections.get("dob")
+        or phonetic_matrix.get("dob_a")
         or (recon.dob_a if recon and recon.dob_a else None)
         or (aadhaar_front_doc.dob if aadhaar_front_doc and aadhaar_front_doc.dob else None)
         or (marksheet_doc.dob if marksheet_doc and marksheet_doc.dob else None)
         or "[DOB Not Recorded]"
     )
 
-    app_pin = postal_details.get("pincode") or (recon.pincode_query if recon and recon.pincode_query else (aadhaar_back_doc.pincode if aadhaar_back_doc and aadhaar_back_doc.pincode else ""))
-    app_district = postal_details.get("district") or (recon.district_verified if recon and recon.district_verified else (aadhaar_back_doc.district if aadhaar_back_doc and aadhaar_back_doc.district else None))
+    app_pin = (
+        user_corrections.get("pincode")
+        or postal_details.get("pincode")
+        or (recon.pincode_query if recon and recon.pincode_query else (aadhaar_back_doc.pincode if aadhaar_back_doc and aadhaar_back_doc.pincode else ""))
+    )
+    app_district = (
+        user_corrections.get("district")
+        or postal_details.get("district")
+        or (recon.district_verified if recon and recon.district_verified else (aadhaar_back_doc.district if aadhaar_back_doc and aadhaar_back_doc.district else None))
+    )
 
-    app_place = app_district or "[Place of Execution / City]"
+    app_place = user_corrections.get("place") or app_district or "[Place of Execution / City]"
     app_state = postal_details.get("state") or ""
 
-    app_address = phonetic_matrix.get("address") or (
-        f"Dist. {app_district}, {app_state} - {app_pin}" if app_district and app_pin and app_state
-        else (f"Dist. {app_district} - {app_pin}" if app_district and app_pin
-        else (f"Dist. {app_district}" if app_district else "[Address Not Provided]"))
+    app_address = (
+        user_corrections.get("address")
+        or phonetic_matrix.get("address")
+        or (
+            f"Dist. {app_district}, {app_state} - {app_pin}" if app_district and app_pin and app_state
+            else (f"Dist. {app_district} - {app_pin}" if app_district and app_pin
+            else (f"Dist. {app_district}" if app_district else "[Address Not Provided]"))
+        )
     )
 
     app_id_aadhaar = phonetic_matrix.get("aadhaar_num") or (aadhaar_back_doc.id_number if aadhaar_back_doc and aadhaar_back_doc.id_number else (aadhaar_front_doc.id_number if aadhaar_front_doc and aadhaar_front_doc.id_number else ""))
@@ -410,15 +433,27 @@ async def generate_custom_declaration_pdf(
     demo = resolve_session_demographics(docs, recon)
 
     cf = req.custom_fields
-    applicant_name = (cf.applicant_name if cf and cf.applicant_name else demo["app_name_aadhaar"])
-    secondary_name = (cf.secondary_doc.name_recorded if cf and cf.secondary_doc and cf.secondary_doc.name_recorded else demo["app_name_sec"])
-    father_name = (cf.father_or_guardian_name if cf and cf.father_or_guardian_name else demo["app_father"])
-    dob = (cf.dob if cf and cf.dob else demo["app_dob"])
-    address = (cf.address if cf and cf.address else demo["app_address"])
-    place = (req.place or (cf.place if cf and cf.place else demo["app_place"]))
+    applicant_name = (cf.applicant_name.strip() if cf and cf.applicant_name and cf.applicant_name.strip() else demo["app_name_aadhaar"])
+    secondary_name = (cf.secondary_doc.name_recorded.strip() if cf and cf.secondary_doc and cf.secondary_doc.name_recorded and cf.secondary_doc.name_recorded.strip() else demo["app_name_sec"])
+    father_name = (cf.father_or_guardian_name.strip() if cf and cf.father_or_guardian_name and cf.father_or_guardian_name.strip() else demo["app_father"])
+    dob = (cf.dob.strip() if cf and cf.dob and cf.dob.strip() else demo["app_dob"])
+    address = (cf.address.strip() if cf and cf.address and cf.address.strip() else demo["app_address"])
+    place = (req.place.strip() if req.place and req.place.strip() else (cf.place.strip() if cf and cf.place and cf.place.strip() else demo["app_place"]))
     lang = req.language or (cf.language if cf and cf.language else "en")
     disc_type = (cf.discrepancy_type if cf and cf.discrepancy_type else demo["disc_analysis"]["type"])
-    custom_paragraphs = cf.declaration_paragraphs if cf and cf.declaration_paragraphs else None
+
+    # Persist user corrections to session record so Playwright and all subsequent stages use the edited details
+    if recon:
+        pm = dict(recon.phonetic_matrix or {})
+        uc = dict(pm.get("user_corrections") or {})
+        uc["applicant_name"] = applicant_name
+        uc["father_name"] = father_name
+        uc["dob"] = dob
+        uc["address"] = address
+        uc["place"] = place
+        pm["user_corrections"] = uc
+        recon.phonetic_matrix = pm
+        await db.commit()
 
     citations_to_pass = []
     if cf and cf.verified_citations:
@@ -433,6 +468,26 @@ async def generate_custom_declaration_pdf(
     else:
         citations_to_pass = demo["verified_citations"]
 
+    # Re-build fresh paragraphs dynamically using the updated applicant, father, and demographic values
+    fresh_draft = affidavit_generator.build_declaration_draft(
+        session_id=req.session_id,
+        applicant_name_aadhaar=applicant_name,
+        applicant_name_secondary=secondary_name,
+        father_name=father_name,
+        dob=dob,
+        address=address,
+        id_numbers={"aadhaar": demo["app_id_aadhaar"], "secondary": demo["app_id_sec"]},
+        citations=citations_to_pass,
+        place=place,
+        language=lang,
+        discrepancy_type=disc_type,
+        doc_details={
+            "secondary_doc_name": demo["sec_doc_name"],
+            "secondary_issuing_authority": demo["sec_doc_auth"]
+        }
+    )
+    paragraphs_to_render = fresh_draft["draft"]["declaration_paragraphs"]
+
     affidavit_result = await asyncio.to_thread(
         affidavit_generator.generate_affidavit,
         session_id=req.session_id,
@@ -446,7 +501,7 @@ async def generate_custom_declaration_pdf(
         place=place,
         language=lang,
         discrepancy_type=disc_type,
-        custom_paragraphs=custom_paragraphs,
+        custom_paragraphs=paragraphs_to_render,
         doc_details={
             "secondary_doc_name": demo["sec_doc_name"],
             "secondary_issuing_authority": demo["sec_doc_auth"]
@@ -489,6 +544,9 @@ async def generate_custom_declaration_pdf(
 
     await db.commit()
 
+    import time
+    ts_now = int(time.time() * 1000)
+
     return CompiledAssetDetail(
         asset_id=affidavit_asset.id,
         asset_type="affidavit_pdf",
@@ -498,7 +556,7 @@ async def generate_custom_declaration_pdf(
         file_size_kb=affidavit_result["file_size_kb"],
         target_window_kb="< 100KB",
         sha256_hash=affidavit_result["sha256_hash"],
-        download_url=f"/api/compiler/download/affidavit_pdf/{req.session_id}",
+        download_url=f"/api/compiler/download/affidavit_pdf/{req.session_id}?t={ts_now}",
         compliant=affidavit_result["compliant"],
         telemetry={"pages": 1, "format": "PDF-1.4", "language": lang}
     )

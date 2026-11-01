@@ -48,6 +48,15 @@ export interface PhoneticBreakdown {
   initial_expansion_detected: boolean;
   reconciled_canonical_name: string;
   pass_threshold: boolean;
+  corrected_value?: string;
+  resolved_by_user?: boolean;
+}
+
+export interface CorrectDemographicsRequest {
+  session_id: string;
+  field: string;
+  corrected_value: string;
+  workflow_target?: string;
 }
 
 export interface PostalValidationResult {
@@ -89,6 +98,8 @@ export interface ReconciliationResponse {
     aadhaar_dob?: string;
     pan_dob?: string;
     match: boolean;
+    resolved_by_user?: boolean;
+    corrected_value?: string;
   };
   postal_reconciliation: PostalValidationResult;
   statutory_citations: Array<{

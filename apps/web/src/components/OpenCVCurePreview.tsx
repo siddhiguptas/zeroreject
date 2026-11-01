@@ -23,6 +23,7 @@ export const OpenCVCurePreview: React.FC<OpenCVCurePreviewProps> = ({
 }) => {
   const [showComparison, setShowComparison] = useState(false);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [customAffidavitAsset, setCustomAffidavitAsset] = useState<CompiledAssetDetail | null>(null);
   const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
   if (!compileData && !loading) {
@@ -53,7 +54,7 @@ export const OpenCVCurePreview: React.FC<OpenCVCurePreviewProps> = ({
     );
   }
 
-  const affidavitAsset = compileData?.assets.find((a) => a.asset_type === 'affidavit_pdf');
+  const affidavitAsset = customAffidavitAsset || compileData?.assets.find((a) => a.asset_type === 'affidavit_pdf');
   const portraitAsset = compileData?.assets.find((a) => a.asset_type === 'portrait');
   const signatureAsset = compileData?.assets.find((a) => a.asset_type === 'signature');
   const affidavitDownloadUrl = affidavitAsset ? `${apiBase}${affidavitAsset.download_url}` : null;
@@ -127,8 +128,9 @@ export const OpenCVCurePreview: React.FC<OpenCVCurePreviewProps> = ({
 
       {/* Grid of Compiled Assets */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {compileData?.assets.map((asset) => {
-          const isPdf = asset.asset_type === 'affidavit_pdf';
+        {compileData?.assets.map((baseAsset) => {
+          const isPdf = baseAsset.asset_type === 'affidavit_pdf';
+          const asset = (isPdf && customAffidavitAsset) ? customAffidavitAsset : baseAsset;
           const downloadUrl = `${apiBase}${asset.download_url}`;
 
           return (
@@ -274,6 +276,7 @@ export const OpenCVCurePreview: React.FC<OpenCVCurePreviewProps> = ({
         isOpen={isEditorOpen}
         onClose={() => setIsEditorOpen(false)}
         sessionId={sessionId}
+        onPdfUpdated={(newAsset) => setCustomAffidavitAsset(newAsset)}
       />
     </div>
   );

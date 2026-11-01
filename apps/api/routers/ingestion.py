@@ -18,6 +18,7 @@ from apps.api.models.entities import (
     ReconciliationRecord,
 )
 from apps.api.schemas.contracts import (
+    CorrectDemographicsRequest,
     DocumentUploadResponse,
     ExtractedFieldData,
     LoadSamplePacketRequest,
@@ -264,7 +265,8 @@ async def execute_4gate_reconciliation(
     session_id: str,
     workflow_target: str,
     extracted_docs: dict[str, ExtractedDocument],
-    db: AsyncSession
+    db: AsyncSession,
+    user_corrections_override: dict | None = None
 ) -> ReconciliationResponse:
     """
     Executes the 4-Gate Virtual Lekhpal Pre-Flight Audit on extracted documents:
@@ -273,6 +275,17 @@ async def execute_4gate_reconciliation(
     3. Gate 3: Statutory Rules & Revenue Expiry Verification (BM25 RAG).
     4. Gate 4: Live India Post LGD Postal & Tehsil Verification (api.postalpincode.in).
     """
+    # Check for existing reconciliation record to load prior user corrections
+    recon_res = await db.execute(select(ReconciliationRecord).where(ReconciliationRecord.session_id == session_id))
+    recon_record = recon_res.scalars().first()
+
+    user_corrections = dict(user_corrections_override) if user_corrections_override is not None else {}
+    if not user_corrections and recon_record and recon_record.phonetic_matrix:
+        user_corrections = dict(recon_record.phonetic_matrix.get("user_corrections") or {})
+    elif user_corrections_override and recon_record and recon_record.phonetic_matrix:
+        prior = dict(recon_record.phonetic_matrix.get("user_corrections") or {})
+        user_corrections = {**prior, **user_corrections}
+
     candidate_primary = [d for d in [extracted_docs.get("aadhaar_front"), extracted_docs.get("aadhaar")] if d is not None]
     aadhaar_front_doc = max(candidate_primary, key=lambda x: x.id or 0) if candidate_primary else None
     aadhaar_back_doc = extracted_docs.get("aadhaar_back")
@@ -311,6 +324,22 @@ async def execute_4gate_reconciliation(
     dob_a = (aadhaar_front_doc.dob if (aadhaar_front_doc and aadhaar_front_doc.dob) else "NOT FOUND")
     dob_b = (secondary_doc.dob if (secondary_doc and secondary_doc.dob) else "NOT FOUND")
     dob_match = (dob_a == dob_b and dob_a != "NOT FOUND")
+
+    # Apply user-confirmed demographic corrections if available
+    if user_corrections.get("applicant_name"):
+        name_breakdown.resolved_by_user = True
+        name_breakdown.corrected_value = user_corrections["applicant_name"]
+        name_breakdown.pass_threshold = True
+        name_breakdown.reconciled_canonical_name = user_corrections["applicant_name"]
+
+    if user_corrections.get("father_name"):
+        father_breakdown.resolved_by_user = True
+        father_breakdown.corrected_value = user_corrections["father_name"]
+        father_breakdown.pass_threshold = True
+        father_breakdown.reconciled_canonical_name = user_corrections["father_name"]
+
+    if user_corrections.get("dob"):
+        dob_match = True
 
     # Gender extraction
     gender_detected = "UNSPECIFIED"
@@ -358,6 +387,18 @@ async def execute_4gate_reconciliation(
         dob_match=dob_match,
         postal_valid=postal_res.valid
     )
+
+    # Filter out discrepancies if citizen resolved them
+    if father_breakdown.resolved_by_user:
+        discrepancies = [d for d in discrepancies if "Father/Guardian" not in d]
+    if name_breakdown.resolved_by_user:
+        discrepancies = [d for d in discrepancies if "Name divergence" not in d]
+    if user_corrections.get("dob"):
+        discrepancies = [d for d in discrepancies if "Date of Birth" not in d]
+
+    if risk_score <= 5.0 and len(discrepancies) == 0:
+        risk_score = 0.0
+        status = "PASS"
 
     # If discrepancies detected, retrieve real statutory RAG citations
     if citations:
@@ -409,12 +450,13 @@ async def execute_4gate_reconciliation(
             gate2_details = f"Aadhaar Verhoeff D5 Checksum: {'VALID' if is_verhoeff_valid else 'FAILED'}. Secondary PAN identifier missing (NOT FOUND)."
 
     # 4-Gate Virtual Lekhpal Scorecard (Dynamic Real Computations)
+    gate1_is_resolved = bool(father_breakdown.resolved_by_user or name_breakdown.resolved_by_user)
     four_gates = {
         "gate1_phonetic": {
             "gate_num": 1,
             "title": "Gate 1 — Cross-Script Phonetic & Token Graph",
-            "status": "PASS_CURABLE" if (name_breakdown.initial_expansion_detected or (name_breakdown.jaro_winkler_score < 0.99 and name_breakdown.pass_threshold)) else ("PASSED" if name_breakdown.pass_threshold else "FLAGGED"),
-            "verdict": "Curable Discrepancy (Initial Expansion & Inversion)" if name_breakdown.initial_expansion_detected else ("Phonetic Similarity Confirmed" if name_breakdown.pass_threshold else "Fatal Identity Mismatch across documents"),
+            "status": "PASSED" if (name_breakdown.pass_threshold and (father_breakdown.pass_threshold or father_breakdown.resolved_by_user)) else ("PASS_CURABLE" if (name_breakdown.initial_expansion_detected or (name_breakdown.jaro_winkler_score < 0.99 and name_breakdown.pass_threshold)) else "FLAGGED"),
+            "verdict": (f"Resolved by Citizen: {father_breakdown.corrected_value or name_breakdown.corrected_value}" if gate1_is_resolved else ("Curable Discrepancy (Initial Expansion & Inversion)" if name_breakdown.initial_expansion_detected else ("Phonetic Similarity Confirmed" if name_breakdown.pass_threshold else "Fatal Identity Mismatch across documents"))),
             "double_metaphone": f"{name_breakdown.double_metaphone.primary_code_a} vs {name_breakdown.double_metaphone.primary_code_b}",
             "jaro_winkler": round(name_breakdown.jaro_winkler_score, 4),
             "token_sort_ratio": round(name_breakdown.token_sort_ratio, 4),
@@ -436,8 +478,8 @@ async def execute_4gate_reconciliation(
         "gate3_statutory_rules": {
             "gate_num": 3,
             "title": "Gate 3 — Statutory Eligibility, Cutoff & Expiry Gate",
-            "status": "PASSED" if (dob_match and dob_a != "NOT FOUND") else "FLAGGED",
-            "verdict": "Statutory Eligibility Confirmed" if (dob_match and dob_a != "NOT FOUND") else ("Date of Birth Mismatch" if dob_a != "NOT FOUND" and dob_b != "NOT FOUND" else "DOB Proof Incomplete"),
+            "status": "PASSED" if (dob_match and (dob_a != "NOT FOUND" or bool(user_corrections.get("dob")))) else "FLAGGED",
+            "verdict": (f"DOB Discrepancy Resolved by Citizen: {user_corrections['dob']}" if user_corrections.get("dob") else ("Statutory Eligibility Confirmed" if (dob_match and dob_a != "NOT FOUND") else ("Date of Birth Mismatch" if dob_a != "NOT FOUND" and dob_b != "NOT FOUND" else "DOB Proof Incomplete"))),
             "statutory_validity_window": "Document verified against revenue eligibility timeline",
             "dob_proof_validity": f"Primary DOB: {dob_a} vs Secondary DOB: {dob_b} ({'MATCHED' if dob_match else 'DISCREPANCY DETECTED'})",
             "details": f"Cross-document age verification: Primary ID lists '{dob_a}', Secondary ID lists '{dob_b}'."
@@ -465,6 +507,7 @@ async def execute_4gate_reconciliation(
     phonetic_matrix_dict["gender"] = gender_detected
     phonetic_matrix_dict["aadhaar_num"] = aadhaar_num
     phonetic_matrix_dict["pan_num"] = pan_num
+    phonetic_matrix_dict["user_corrections"] = user_corrections
 
     address_query = (
         (aadhaar_back_doc.address if (aadhaar_back_doc and aadhaar_back_doc.address) else None)
@@ -473,23 +516,36 @@ async def execute_4gate_reconciliation(
     )
     phonetic_matrix_dict["address"] = address_query
 
-    recon_record = ReconciliationRecord(
-        session_id=session_id,
-        rejection_risk_score=risk_score,
-        name_similarity_score=name_breakdown.jaro_winkler_score,
-        father_similarity_score=father_breakdown.jaro_winkler_score,
-        dob_match=dob_match,
-        postal_verified=postal_res.valid,
-        phonetic_matrix=phonetic_matrix_dict,
-        postal_details=postal_res.model_dump(),
-        discrepancy_flags=discrepancies,
-        curation_recommendations=[
-            "Execute adaptive contour signature compiler to meet <= 19.5KB portal threshold.",
-            "Generate Statutory 'One-and-the-Same Person' Self-Declaration Affidavit (Passport Seva Annexure 'E' / EPFO Joint Declaration).",
-            "Auto-fill canonical demographic form via Playwright Self-Healing agent with session checkpointing."
-        ]
-    )
-    db.add(recon_record)
+    curation_recommendations = [
+        "Execute adaptive contour signature compiler to meet <= 19.5KB portal threshold.",
+        "Generate Statutory 'One-and-the-Same Person' Self-Declaration Affidavit (Passport Seva Annexure 'E' / EPFO Joint Declaration).",
+        "Auto-fill canonical demographic form via Playwright Self-Healing agent with session checkpointing."
+    ]
+
+    if recon_record:
+        recon_record.rejection_risk_score = risk_score
+        recon_record.name_similarity_score = name_breakdown.jaro_winkler_score
+        recon_record.father_similarity_score = father_breakdown.jaro_winkler_score
+        recon_record.dob_match = dob_match
+        recon_record.postal_verified = postal_res.valid
+        recon_record.phonetic_matrix = phonetic_matrix_dict
+        recon_record.postal_details = postal_res.model_dump()
+        recon_record.discrepancy_flags = discrepancies
+        recon_record.curation_recommendations = curation_recommendations
+    else:
+        recon_record = ReconciliationRecord(
+            session_id=session_id,
+            rejection_risk_score=risk_score,
+            name_similarity_score=name_breakdown.jaro_winkler_score,
+            father_similarity_score=father_breakdown.jaro_winkler_score,
+            dob_match=dob_match,
+            postal_verified=postal_res.valid,
+            phonetic_matrix=phonetic_matrix_dict,
+            postal_details=postal_res.model_dump(),
+            discrepancy_flags=discrepancies,
+            curation_recommendations=curation_recommendations
+        )
+        db.add(recon_record)
     await db.commit()
 
     return ReconciliationResponse(
@@ -502,7 +558,9 @@ async def execute_4gate_reconciliation(
         dob_reconciliation={
             "aadhaar_dob": dob_a,
             "pan_dob": dob_b,
-            "match": dob_match
+            "match": dob_match,
+            "corrected_value": user_corrections.get("dob"),
+            "resolved_by_user": bool(user_corrections.get("dob"))
         },
         postal_reconciliation=postal_res,
         statutory_citations=citations,
@@ -534,4 +592,43 @@ async def reconcile_uploaded_documents_session(
     # Sort by document id ascending so latest upload for any slot takes precedence
     extracted_docs = {d.doc_type: d for d in sorted(docs, key=lambda x: x.id or 0)}
     return await execute_4gate_reconciliation(req.session_id, req.workflow_target, extracted_docs, db)
+
+
+@router.post("/correct-demographics", response_model=ReconciliationResponse)
+async def correct_demographics(
+    req: CorrectDemographicsRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Applies user-confirmed authoritative corrections for mismatched demographics
+    (e.g. father name, applicant name, DOB, or residential address).
+    Persists correction to session state, eliminates mismatch penalty,
+    and returns updated 4-Gate Reconciliation response.
+    """
+    docs_res = await db.execute(select(ExtractedDocument).where(ExtractedDocument.session_id == req.session_id))
+    docs = docs_res.scalars().all()
+
+    if not docs:
+        raise HTTPException(
+            status_code=400,
+            detail="No uploaded documents found for this session."
+        )
+
+    extracted_docs = {d.doc_type: d for d in sorted(docs, key=lambda x: x.id or 0)}
+
+    recon_res = await db.execute(select(ReconciliationRecord).where(ReconciliationRecord.session_id == req.session_id))
+    recon_record = recon_res.scalars().first()
+    user_corrections = {}
+    if recon_record and recon_record.phonetic_matrix:
+        user_corrections = dict(recon_record.phonetic_matrix.get("user_corrections") or {})
+
+    user_corrections[req.field] = req.corrected_value.strip()
+
+    return await execute_4gate_reconciliation(
+        session_id=req.session_id,
+        workflow_target=req.workflow_target or "e_district_income",
+        extracted_docs=extracted_docs,
+        db=db,
+        user_corrections_override=user_corrections
+    )
 

@@ -3,20 +3,56 @@
 import React, { useState } from 'react';
 import { ShieldCheck, AlertCircle, MapPin, CheckCircle2, BookOpen, Hash, Volume2, ArrowRight, QrCode, Scale, FileCheck } from 'lucide-react';
 import { ReconciliationResponse } from '@/types';
-import { askVoiceCopilot } from '@/lib/api-client';
+import { askVoiceCopilot, correctDemographics } from '@/lib/api-client';
 
 interface PhoneticGraphMatrixProps {
   reconciliation: ReconciliationResponse | null;
   loading: boolean;
   onProceedToCure?: () => void;
+  sessionId?: string;
+  workflowTarget?: string;
+  onReconciliationUpdated?: (updated: ReconciliationResponse) => void;
 }
 
 export const PhoneticGraphMatrix: React.FC<PhoneticGraphMatrixProps> = ({
   reconciliation,
   loading,
   onProceedToCure,
+  sessionId,
+  workflowTarget,
+  onReconciliationUpdated,
 }) => {
   const [playingLang, setPlayingLang] = useState<'hi' | 'en' | null>(null);
+  const [correctingField, setCorrectingField] = useState<string | null>(null);
+  const [customFatherInput, setCustomFatherInput] = useState<string>('');
+  const [customNameInput, setCustomNameInput] = useState<string>('');
+  const [customDobInput, setCustomDobInput] = useState<string>('');
+  const [editingFather, setEditingFather] = useState<boolean>(false);
+  const [editingName, setEditingName] = useState<boolean>(false);
+  const [editingDob, setEditingDob] = useState<boolean>(false);
+
+  const handleApplyCorrection = async (field: string, value: string) => {
+    if (!sessionId || !value.trim()) return;
+    try {
+      setCorrectingField(field);
+      const updated = await correctDemographics(
+        sessionId,
+        field,
+        value.trim(),
+        workflowTarget || 'e_district_income'
+      );
+      if (onReconciliationUpdated) {
+        onReconciliationUpdated(updated);
+      }
+      if (field === 'father_name') setEditingFather(false);
+      if (field === 'applicant_name') setEditingName(false);
+      if (field === 'dob') setEditingDob(false);
+    } catch (e) {
+      console.error('Failed to apply demographic correction', e);
+    } finally {
+      setCorrectingField(null);
+    }
+  };
 
   const handlePlayBriefing = async (lang: 'hi' | 'en') => {
     if (playingLang) return;
@@ -276,80 +312,345 @@ export const PhoneticGraphMatrix: React.FC<PhoneticGraphMatrixProps> = ({
 
         <div className="divide-y divide-[#DFDBD2] text-xs">
           {/* Row 1: Candidate Name */}
-          <div className="p-4 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-            <div className="md:col-span-3">
-              <span className="font-semibold text-[#111625] block">Applicant Full Name</span>
-              <span className="text-[10px] font-mono text-[#525866]">Cross-Document Primary Key</span>
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+              <div className="md:col-span-3">
+                <span className="font-semibold text-[#111625] block">Applicant Full Name</span>
+                <span className="text-[10px] font-mono text-[#525866]">Cross-Document Primary Key</span>
+              </div>
+
+              <div className="md:col-span-5 space-y-1.5 font-mono">
+                <div className="flex justify-between bg-[#F8F7F4] p-1.5 rounded border border-[#DFDBD2]">
+                  <span className="text-gray-500">Aadhaar:</span>
+                  <span className="font-semibold text-[#162A45]">{name_reconciliation.original_a}</span>
+                </div>
+                <div className="flex justify-between bg-[#F8F7F4] p-1.5 rounded border border-[#DFDBD2]">
+                  <span className="text-gray-500">PAN / Marksheet:</span>
+                  <span className={`font-semibold ${
+                    name_reconciliation.pass_threshold ? 'text-emerald-700' : 'text-[#C93B2B]'
+                  }`}>
+                    {name_reconciliation.original_b}
+                  </span>
+                </div>
+              </div>
+
+              <div className="md:col-span-4 font-mono space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Jaro-Winkler:</span>
+                  <span className="font-semibold text-[#111625] font-tabular">{name_reconciliation.jaro_winkler_score}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Token-Sort Ratio:</span>
+                  <span className="font-semibold text-[#111625] font-tabular">{name_reconciliation.token_sort_ratio}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Initial Expansion:</span>
+                  <span className={name_reconciliation.initial_expansion_detected ? "text-amber-700 font-bold" : "text-emerald-700 font-bold"}>
+                    {name_reconciliation.initial_expansion_detected ? 'DETECTED (Curable)' : (name_reconciliation.pass_threshold ? 'MATCHED ✓' : 'MISMATCH ✗')}
+                  </span>
+                </div>
+              </div>
             </div>
 
-            <div className="md:col-span-5 space-y-1.5 font-mono">
-              <div className="flex justify-between bg-[#F8F7F4] p-1.5 rounded border border-[#DFDBD2]">
-                <span className="text-gray-500">Aadhaar:</span>
-                <span className="font-semibold text-[#162A45]">{name_reconciliation.original_a}</span>
-              </div>
-              <div className="flex justify-between bg-[#F8F7F4] p-1.5 rounded border border-[#DFDBD2]">
-                <span className="text-gray-500">PAN / Marksheet:</span>
-                <span className={`font-semibold ${
-                  name_reconciliation.pass_threshold ? 'text-emerald-700' : 'text-[#C93B2B]'
-                }`}>
-                  {name_reconciliation.original_b}
+            {/* Resolved confirmation badge */}
+            {(name_reconciliation.resolved_by_user || name_reconciliation.corrected_value) && (
+              <div className="p-2 bg-emerald-50 border border-emerald-200 rounded flex items-center justify-between text-xs">
+                <span className="text-emerald-800 font-semibold flex items-center space-x-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>Authoritative Applicant Name confirmed: <strong className="text-[#162A45]">{name_reconciliation.corrected_value || name_reconciliation.reconciled_canonical_name}</strong></span>
                 </span>
+                <button
+                  type="button"
+                  onClick={() => setEditingName(true)}
+                  className="text-[11px] text-[#162A45] underline hover:text-[#1f3a5e] font-mono ml-2"
+                >
+                  Change
+                </button>
               </div>
-            </div>
+            )}
 
-            <div className="md:col-span-4 font-mono space-y-1">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Jaro-Winkler:</span>
-                <span className="font-semibold text-[#111625] font-tabular">{name_reconciliation.jaro_winkler_score}</span>
+            {/* Mismatch Resolution UI: Shown ONLY if mismatched or user explicitly clicked Change */}
+            {(!name_reconciliation.pass_threshold || editingName) && !(name_reconciliation.resolved_by_user && !editingName) && (
+              <div className="p-3 bg-amber-50/90 border border-amber-300 rounded-md space-y-2">
+                <div className="text-[11px] font-bold text-amber-950 flex items-center space-x-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                  <span>Discrepancy Detected — Select or enter authoritative Applicant Name to cure:</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {name_reconciliation.original_a && name_reconciliation.original_a !== 'NOT FOUND' && (
+                    <button
+                      type="button"
+                      onClick={() => handleApplyCorrection('applicant_name', name_reconciliation.original_a)}
+                      disabled={correctingField === 'applicant_name'}
+                      className="px-2.5 py-1 bg-white hover:bg-amber-100 border border-amber-300 text-xs font-mono rounded text-gray-800 transition-colors shadow-2xs"
+                    >
+                      Use Aadhaar: <strong className="text-[#162A45]">{name_reconciliation.original_a}</strong>
+                    </button>
+                  )}
+                  {name_reconciliation.original_b && name_reconciliation.original_b !== 'NOT FOUND' && (
+                    <button
+                      type="button"
+                      onClick={() => handleApplyCorrection('applicant_name', name_reconciliation.original_b)}
+                      disabled={correctingField === 'applicant_name'}
+                      className="px-2.5 py-1 bg-white hover:bg-amber-100 border border-amber-300 text-xs font-mono rounded text-gray-800 transition-colors shadow-2xs"
+                    >
+                      Use Secondary ID: <strong className="text-[#162A45]">{name_reconciliation.original_b}</strong>
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center space-x-2 pt-1">
+                  <input
+                    type="text"
+                    value={customNameInput}
+                    onChange={(e) => setCustomNameInput(e.target.value)}
+                    placeholder="Or type correct applicant name here..."
+                    className="text-xs px-2.5 py-1.5 bg-white border border-[#DFDBD2] rounded flex-1 focus:outline-none focus:ring-1 focus:ring-[#162A45]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleApplyCorrection('applicant_name', customNameInput)}
+                    disabled={!customNameInput.trim() || correctingField === 'applicant_name'}
+                    className="px-3.5 py-1.5 bg-[#162A45] hover:bg-[#1f3a5e] text-white text-xs font-semibold rounded transition-colors disabled:opacity-50"
+                  >
+                    {correctingField === 'applicant_name' ? 'Saving...' : 'Apply'}
+                  </button>
+                  {editingName && (
+                    <button
+                      type="button"
+                      onClick={() => setEditingName(false)}
+                      className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-800"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Token-Sort Ratio:</span>
-                <span className="font-semibold text-[#111625] font-tabular">{name_reconciliation.token_sort_ratio}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Initial Expansion:</span>
-                <span className={name_reconciliation.initial_expansion_detected ? "text-amber-700 font-bold" : "text-emerald-700 font-bold"}>
-                  {name_reconciliation.initial_expansion_detected ? 'DETECTED (Curable)' : (name_reconciliation.pass_threshold ? 'MATCHED ✓' : 'MISMATCH ✗')}
-                </span>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Row 2: Father / Guardian Name */}
-          <div className="p-4 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-            <div className="md:col-span-3">
-              <span className="font-semibold text-[#111625] block">Father / Guardian Name</span>
-              <span className="text-[10px] font-mono text-[#525866]">EPFO Joint Decl. Para 3.2</span>
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+              <div className="md:col-span-3">
+                <span className="font-semibold text-[#111625] block">Father / Guardian Name</span>
+                <span className="text-[10px] font-mono text-[#525866]">EPFO Joint Decl. Para 3.2</span>
+              </div>
+
+              <div className="md:col-span-5 space-y-1.5 font-mono">
+                <div className="flex justify-between bg-[#F8F7F4] p-1.5 rounded border border-[#DFDBD2]">
+                  <span className="text-gray-500">Primary ID:</span>
+                  <span className="font-semibold text-[#162A45]">{father_reconciliation.original_a}</span>
+                </div>
+                <div className="flex justify-between bg-[#F8F7F4] p-1.5 rounded border border-[#DFDBD2]">
+                  <span className="text-gray-500">Secondary ID:</span>
+                  <span className={`font-semibold ${
+                    father_reconciliation.pass_threshold ? 'text-emerald-700' : 'text-[#C93B2B]'
+                  }`}>
+                    {father_reconciliation.original_b}
+                  </span>
+                </div>
+              </div>
+
+              <div className="md:col-span-4 font-mono space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Jaro-Winkler:</span>
+                  <span className="font-semibold text-[#111625] font-tabular">{father_reconciliation.jaro_winkler_score}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Pass Threshold:</span>
+                  <span className={father_reconciliation.pass_threshold ? "text-emerald-700 font-bold" : "text-[#C93B2B] font-bold"}>
+                    {father_reconciliation.pass_threshold ? 'PASSED (>= 0.85)' : 'MISMATCH (< 0.85)'}
+                  </span>
+                </div>
+              </div>
             </div>
 
-            <div className="md:col-span-5 space-y-1.5 font-mono">
-              <div className="flex justify-between bg-[#F8F7F4] p-1.5 rounded border border-[#DFDBD2]">
-                <span className="text-gray-500">Primary ID:</span>
-                <span className="font-semibold text-[#162A45]">{father_reconciliation.original_a}</span>
-              </div>
-              <div className="flex justify-between bg-[#F8F7F4] p-1.5 rounded border border-[#DFDBD2]">
-                <span className="text-gray-500">Secondary ID:</span>
-                <span className={`font-semibold ${
-                  father_reconciliation.pass_threshold ? 'text-emerald-700' : 'text-[#C93B2B]'
-                }`}>
-                  {father_reconciliation.original_b}
+            {/* Resolved confirmation badge */}
+            {(father_reconciliation.resolved_by_user || father_reconciliation.corrected_value) && (
+              <div className="p-2 bg-emerald-50 border border-emerald-200 rounded flex items-center justify-between text-xs">
+                <span className="text-emerald-800 font-semibold flex items-center space-x-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>Authoritative Father Name confirmed: <strong className="text-[#162A45]">{father_reconciliation.corrected_value || father_reconciliation.reconciled_canonical_name}</strong></span>
                 </span>
+                <button
+                  type="button"
+                  onClick={() => setEditingFather(true)}
+                  className="text-[11px] text-[#162A45] underline hover:text-[#1f3a5e] font-mono ml-2"
+                >
+                  Change
+                </button>
               </div>
-            </div>
+            )}
 
-            <div className="md:col-span-4 font-mono space-y-1">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Jaro-Winkler:</span>
-                <span className="font-semibold text-[#111625] font-tabular">{father_reconciliation.jaro_winkler_score}</span>
+            {/* Mismatch Resolution UI: Shown ONLY if mismatched or user explicitly clicked Change */}
+            {(!father_reconciliation.pass_threshold || editingFather) && !(father_reconciliation.resolved_by_user && !editingFather) && (
+              <div className="p-3 bg-amber-50/90 border border-amber-300 rounded-md space-y-2">
+                <div className="text-[11px] font-bold text-amber-950 flex items-center space-x-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                  <span>Discrepancy Detected — Select or enter authoritative Father / Guardian name to cure:</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {father_reconciliation.original_a && father_reconciliation.original_a !== 'NOT FOUND' && (
+                    <button
+                      type="button"
+                      onClick={() => handleApplyCorrection('father_name', father_reconciliation.original_a)}
+                      disabled={correctingField === 'father_name'}
+                      className="px-2.5 py-1 bg-white hover:bg-amber-100 border border-amber-300 text-xs font-mono rounded text-gray-800 transition-colors shadow-2xs"
+                    >
+                      Use Primary ID: <strong className="text-[#162A45]">{father_reconciliation.original_a}</strong>
+                    </button>
+                  )}
+                  {father_reconciliation.original_b && father_reconciliation.original_b !== 'NOT FOUND' && (
+                    <button
+                      type="button"
+                      onClick={() => handleApplyCorrection('father_name', father_reconciliation.original_b)}
+                      disabled={correctingField === 'father_name'}
+                      className="px-2.5 py-1 bg-white hover:bg-amber-100 border border-amber-300 text-xs font-mono rounded text-gray-800 transition-colors shadow-2xs"
+                    >
+                      Use Secondary ID: <strong className="text-[#162A45]">{father_reconciliation.original_b}</strong>
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center space-x-2 pt-1">
+                  <input
+                    type="text"
+                    value={customFatherInput}
+                    onChange={(e) => setCustomFatherInput(e.target.value)}
+                    placeholder="Or type correct father name here..."
+                    className="text-xs px-2.5 py-1.5 bg-white border border-[#DFDBD2] rounded flex-1 focus:outline-none focus:ring-1 focus:ring-[#162A45]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleApplyCorrection('father_name', customFatherInput)}
+                    disabled={!customFatherInput.trim() || correctingField === 'father_name'}
+                    className="px-3.5 py-1.5 bg-[#162A45] hover:bg-[#1f3a5e] text-white text-xs font-semibold rounded transition-colors disabled:opacity-50"
+                  >
+                    {correctingField === 'father_name' ? 'Saving...' : 'Apply'}
+                  </button>
+                  {editingFather && (
+                    <button
+                      type="button"
+                      onClick={() => setEditingFather(false)}
+                      className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-800"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Pass Threshold:</span>
-                <span className={father_reconciliation.pass_threshold ? "text-emerald-700 font-bold" : "text-[#C93B2B] font-bold"}>
-                  {father_reconciliation.pass_threshold ? 'PASSED (>= 0.85)' : 'MISMATCH (< 0.85)'}
-                </span>
-              </div>
-            </div>
+            )}
           </div>
+
+          {/* Row 2.5: Date of Birth */}
+          {reconciliation.dob_reconciliation && (
+            <div className="p-4 space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                <div className="md:col-span-3">
+                  <span className="font-semibold text-[#111625] block">Date of Birth (DOB)</span>
+                  <span className="text-[10px] font-mono text-[#525866]">Statutory Eligibility Proof</span>
+                </div>
+
+                <div className="md:col-span-5 space-y-1.5 font-mono">
+                  <div className="flex justify-between bg-[#F8F7F4] p-1.5 rounded border border-[#DFDBD2]">
+                    <span className="text-gray-500">Primary ID:</span>
+                    <span className="font-semibold text-[#162A45]">{reconciliation.dob_reconciliation.aadhaar_dob}</span>
+                  </div>
+                  <div className="flex justify-between bg-[#F8F7F4] p-1.5 rounded border border-[#DFDBD2]">
+                    <span className="text-gray-500">Secondary ID:</span>
+                    <span className={`font-semibold ${
+                      reconciliation.dob_reconciliation.match ? 'text-emerald-700' : 'text-[#C93B2B]'
+                    }`}>
+                      {reconciliation.dob_reconciliation.pan_dob}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="md:col-span-4 font-mono space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Status:</span>
+                    <span className={reconciliation.dob_reconciliation.match ? "text-emerald-700 font-bold" : "text-[#C93B2B] font-bold"}>
+                      {reconciliation.dob_reconciliation.match ? 'MATCHED ✓' : 'MISMATCH ✗'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Resolved badge */}
+              {(reconciliation.dob_reconciliation.resolved_by_user || reconciliation.dob_reconciliation.corrected_value) && (
+                <div className="p-2 bg-emerald-50 border border-emerald-200 rounded flex items-center justify-between text-xs">
+                  <span className="text-emerald-800 font-semibold flex items-center space-x-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Authoritative DOB confirmed: <strong className="text-[#162A45]">{reconciliation.dob_reconciliation.corrected_value}</strong></span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setEditingDob(true)}
+                    className="text-[11px] text-[#162A45] underline hover:text-[#1f3a5e] font-mono ml-2"
+                  >
+                    Change
+                  </button>
+                </div>
+              )}
+
+              {/* Mismatch Resolution UI: ONLY if mismatched or user clicked Change */}
+              {(!reconciliation.dob_reconciliation.match || editingDob) && !(reconciliation.dob_reconciliation.resolved_by_user && !editingDob) && (
+                <div className="p-3 bg-amber-50/90 border border-amber-300 rounded-md space-y-2">
+                  <div className="text-[11px] font-bold text-amber-950 flex items-center space-x-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                    <span>Date of Birth Discrepancy — Select or enter authoritative DOB:</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {reconciliation.dob_reconciliation.aadhaar_dob && reconciliation.dob_reconciliation.aadhaar_dob !== 'NOT FOUND' && (
+                      <button
+                        type="button"
+                        onClick={() => handleApplyCorrection('dob', reconciliation.dob_reconciliation.aadhaar_dob!)}
+                        disabled={correctingField === 'dob'}
+                        className="px-2.5 py-1 bg-white hover:bg-amber-100 border border-amber-300 text-xs font-mono rounded text-gray-800 transition-colors shadow-2xs"
+                      >
+                        Use Primary ID: <strong className="text-[#162A45]">{reconciliation.dob_reconciliation.aadhaar_dob}</strong>
+                      </button>
+                    )}
+                    {reconciliation.dob_reconciliation.pan_dob && reconciliation.dob_reconciliation.pan_dob !== 'NOT FOUND' && (
+                      <button
+                        type="button"
+                        onClick={() => handleApplyCorrection('dob', reconciliation.dob_reconciliation.pan_dob!)}
+                        disabled={correctingField === 'dob'}
+                        className="px-2.5 py-1 bg-white hover:bg-amber-100 border border-amber-300 text-xs font-mono rounded text-gray-800 transition-colors shadow-2xs"
+                      >
+                        Use Secondary ID: <strong className="text-[#162A45]">{reconciliation.dob_reconciliation.pan_dob}</strong>
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-2 pt-1">
+                    <input
+                      type="text"
+                      value={customDobInput}
+                      onChange={(e) => setCustomDobInput(e.target.value)}
+                      placeholder="Or enter DOB (e.g. 28/09/2006)..."
+                      className="text-xs px-2.5 py-1.5 bg-white border border-[#DFDBD2] rounded flex-1 focus:outline-none focus:ring-1 focus:ring-[#162A45]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleApplyCorrection('dob', customDobInput)}
+                      disabled={!customDobInput.trim() || correctingField === 'dob'}
+                      className="px-3.5 py-1.5 bg-[#162A45] hover:bg-[#1f3a5e] text-white text-xs font-semibold rounded transition-colors disabled:opacity-50"
+                    >
+                      {correctingField === 'dob' ? 'Saving...' : 'Apply'}
+                    </button>
+                    {editingDob && (
+                      <button
+                        type="button"
+                        onClick={() => setEditingDob(false)}
+                        className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-800"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Row 3: Postal & LGD Live Jurisdiction */}
           <div className="p-4 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">

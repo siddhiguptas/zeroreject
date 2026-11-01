@@ -52,6 +52,7 @@ export const SelfDeclarationEditorModal: React.FC<SelfDeclarationEditorModalProp
   const [place, setPlace] = useState<string>('');
   const [address, setAddress] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -84,6 +85,7 @@ export const SelfDeclarationEditorModal: React.FC<SelfDeclarationEditorModalProp
     try {
       setSavingPdf(true);
       setErrorMsg(null);
+      setSuccessMsg(null);
 
       const customFields: DeclarationFieldDetails = {
         ...draftData.draft,
@@ -102,7 +104,16 @@ export const SelfDeclarationEditorModal: React.FC<SelfDeclarationEditorModalProp
         place: place
       });
 
+      // Reload fresh draft with updated details so on-screen preview reflects the edits
+      const freshDraft = await fetchDeclarationDraft(sessionId, language, place || undefined);
+      setDraftData(freshDraft);
       setPdfAsset(result);
+      setSuccessMsg(
+        language === 'hi'
+          ? '✓ संशोधित विवरण के साथ स्व-घोषणा पत्र सफलतापूर्वक जनरेट हुआ!'
+          : '✓ Affidavit regenerated with your updated details!'
+      );
+
       if (onPdfUpdated) {
         onPdfUpdated(result);
       }
@@ -187,6 +198,13 @@ export const SelfDeclarationEditorModal: React.FC<SelfDeclarationEditorModalProp
             <div className="bg-red-50 border border-red-300 text-red-800 p-3 rounded-lg text-xs flex items-center space-x-2">
               <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
               <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {successMsg && (
+            <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 p-3 rounded-lg text-xs flex items-center space-x-2 font-medium">
+              <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{successMsg}</span>
             </div>
           )}
 

@@ -121,3 +121,56 @@ def test_authorize_otp_schema_and_screenshot_contract(monkeypatch):
     assert data["filing_status"] == "CONFIRMED_AND_STAMPED"
     assert data["screenshot_base64"] == fake_shot_receipt
     assert data["otp_entered_screenshot_base64"] == fake_shot_otp
+
+
+def test_correct_demographics_flow_and_affidavit_synchronization():
+    """
+    Test that mismatched demographic fields (such as father's name) can be resolved
+    via /api/ingestion/correct-demographics, eliminating the mismatch penalty,
+    updating the reconciliation status, and synchronizing into the synthesized affidavit.
+    """
+    session_id = "test_demographic_correction_session_004"
+
+    # Upload Aadhaar with name 'Siddhi Gupta', C/O 'Nur Hussain Ali'
+    f_front = create_synthetic_doc_img(["GOVERNMENT OF INDIA", "Siddhi Gupta", "DOB: 28/09/2006", "FEMALE", "5372 9459 4158"])
+    f_back = create_synthetic_doc_img(["Address:", "C/O: Nur Hussain Ali", "8 B DPLS ROAD", "Assam - 781003"])
+    # Upload Marksheet with father 'RAJ KUMAR GUPTA'
+    f_marksheet = create_synthetic_doc_img(["CENTRAL BOARD OF SECONDARY EDUCATION", "SIDDHI GUPTA", "Father's / Guardian's Name: RAJ KUMAR GUPTA", "Date of Birth: 28-09-2006", "Roll No. 23222162"])
+
+    client.post("/api/ingestion/upload", data={"session_id": session_id, "doc_type": "aadhaar_front"}, files={"file": ("f.png", f_front, "image/png")})
+    client.post("/api/ingestion/upload", data={"session_id": session_id, "doc_type": "aadhaar_back"}, files={"file": ("b.png", f_back, "image/png")})
+    client.post("/api/ingestion/upload", data={"session_id": session_id, "doc_type": "marksheet"}, files={"file": ("m.png", f_marksheet, "image/png")})
+
+    recon_res = client.post("/api/ingestion/reconcile-session", json={"session_id": session_id})
+    assert recon_res.status_code == 200
+    recon = recon_res.json()
+
+    # Before correction: Father name is mismatched (Nur Hussain Ali vs RAJ KUMAR GUPTA)
+    assert recon["father_reconciliation"]["pass_threshold"] is False
+    initial_risk = recon["rejection_risk_score"]
+    assert initial_risk > 0
+
+    # User applies authoritative correction: selects 'RAJ KUMAR GUPTA'
+    corr_res = client.post(
+        "/api/ingestion/correct-demographics",
+        json={
+            "session_id": session_id,
+            "field": "father_name",
+            "corrected_value": "RAJ KUMAR GUPTA",
+            "workflow_target": "e_district_income"
+        }
+    )
+    assert corr_res.status_code == 200
+    corr_data = corr_res.json()
+
+    # After correction: Father name is marked resolved and pass_threshold is True
+    assert corr_data["father_reconciliation"]["pass_threshold"] is True
+    assert corr_data["father_reconciliation"]["resolved_by_user"] is True
+    assert corr_data["father_reconciliation"]["corrected_value"] == "RAJ KUMAR GUPTA"
+    assert corr_data["rejection_risk_score"] < initial_risk
+
+    # Verify that the synthesized affidavit and draft use 'RAJ KUMAR GUPTA'
+    draft_res = client.get(f"/api/compiler/declaration-draft/{session_id}")
+    assert draft_res.status_code == 200
+    draft = draft_res.json()
+    assert draft["draft"]["father_or_guardian_name"] == "RAJ KUMAR GUPTA"

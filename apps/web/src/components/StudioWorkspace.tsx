@@ -906,6 +906,9 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                 reconciliation={reconciliation}
                 loading={loadingPacket}
                 onProceedToCure={() => setActiveStep(3)}
+                sessionId={sessionId}
+                workflowTarget={workflowTarget}
+                onReconciliationUpdated={(updated) => setReconciliation(updated)}
               />
             </div>
           </ErrorBoundary>

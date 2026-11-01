@@ -67,6 +67,29 @@ export async function reconcileSession(
   return res.json();
 }
 
+export async function correctDemographics(
+  sessionId: string,
+  field: string,
+  correctedValue: string,
+  workflowTarget: string = 'e_district_income'
+): Promise<ReconciliationResponse> {
+  const res = await fetch(`${API_BASE}/api/ingestion/correct-demographics`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      session_id: sessionId,
+      field,
+      corrected_value: correctedValue,
+      workflow_target: workflowTarget,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Demographic correction failed: ${res.statusText}`);
+  }
+  return res.json();
+}
+
 export async function compileAssets(
   sessionId: string,
   targetPortal: string = 'e_district'

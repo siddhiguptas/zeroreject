@@ -35,6 +35,12 @@ class ReconcileSessionRequest(BaseModel):
     session_id: str
     workflow_target: str = "e_district_income"
 
+class CorrectDemographicsRequest(BaseModel):
+    session_id: str
+    field: str  # 'father_name', 'applicant_name', 'dob', 'address', 'place'
+    corrected_value: str
+    workflow_target: str = "e_district_income"
+
 # Deterministic Phonetic & Postal Schemas
 class DoubleMetaphoneMatch(BaseModel):
     name_a: str
@@ -59,6 +65,8 @@ class PhoneticBreakdown(BaseModel):
     initial_expansion_detected: bool
     reconciled_canonical_name: str
     pass_threshold: bool
+    corrected_value: str | None = None
+    resolved_by_user: bool = False
 
 class PostalValidationResult(BaseModel):
     pincode: str
