@@ -2,6 +2,8 @@ import asyncio
 import base64
 import os
 import re
+import sys
+import threading
 import time
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -22,6 +24,30 @@ class PlaywrightBureaucracyAgent:
 
     def __init__(self):
         self.active_contexts: dict[str, dict[str, Any]] = {}
+        self._worker_thread: threading.Thread | None = None
+        self._worker_loop: asyncio.AbstractEventLoop | None = None
+        self._worker_ready = threading.Event()
+        self._lock = threading.Lock()
+
+    def _get_worker_loop(self) -> asyncio.AbstractEventLoop:
+        """Returns a dedicated thread running a ProactorEventLoop on Windows."""
+        with self._lock:
+            if self._worker_thread is None or not self._worker_thread.is_alive():
+                self._worker_ready.clear()
+                self._worker_thread = threading.Thread(target=self._worker_thread_main, daemon=True, name="PlaywrightProactorWorker")
+                self._worker_thread.start()
+                self._worker_ready.wait(timeout=10.0)
+            return self._worker_loop
+
+    def _worker_thread_main(self):
+        if sys.platform == "win32":
+            loop = asyncio.ProactorEventLoop()
+        else:
+            loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        self._worker_loop = loop
+        self._worker_ready.set()
+        loop.run_forever()
 
     async def execute_portal_workflow(
         self,
@@ -31,120 +57,137 @@ class PlaywrightBureaucracyAgent:
         asset_paths: dict[str, str], # portrait, signature, affidavit
         chaos_enabled: bool = False
     ) -> AsyncGenerator[dict[str, Any], None]:
-        start_time = time.time()
-        yield {
-            "step_index": 0,
-            "step_name": "AGENT_INITIALIZATION",
-            "status": "RUNNING",
-            "message": f"Initializing Playwright async browser context for session {session_id[:8]}...",
-            "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        }
+        main_loop = asyncio.get_running_loop()
+        event_queue: asyncio.Queue = asyncio.Queue()
+        worker_loop = self._get_worker_loop()
 
-        playwright_instance = await async_playwright().start()
-        browser: Browser = await playwright_instance.chromium.launch(
-            headless=settings.PLAYWRIGHT_HEADLESS,
-            slow_mo=settings.PLAYWRIGHT_SLOW_MO_MS
-        )
-        context: BrowserContext = await browser.new_context(
-            viewport={"width": 1280, "height": 800},
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) ZeroReject-AutonomousAgent/2.0"
-        )
-        page: Page = await context.new_page()
+        async def _run_in_worker():
+            start_time = time.time()
+            page: Page | None = None
+            playwright_instance = None
+            browser: Browser | None = None
 
-        # Store in active contexts for human-in-the-loop OTP resumption
-        self.active_contexts[session_id] = {
-            "playwright": playwright_instance,
-            "browser": browser,
-            "context": context,
-            "page": page,
-            "status": "IN_PROGRESS"
-        }
+            def emit(item: dict[str, Any]):
+                main_loop.call_soon_threadsafe(event_queue.put_nowait, item)
 
-        try:
+            emit({
+                "step_index": 0,
+                "step_name": "AGENT_INITIALIZATION",
+                "status": "RUNNING",
+                "message": f"Initializing Playwright async browser context for session {session_id[:8]}...",
+                "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            })
+
+            try:
+                playwright_instance = await async_playwright().start()
+                browser = await playwright_instance.chromium.launch(
+                    headless=settings.PLAYWRIGHT_HEADLESS,
+                    slow_mo=settings.PLAYWRIGHT_SLOW_MO_MS
+                )
+                context: BrowserContext = await browser.new_context(
+                    viewport={"width": 1280, "height": 800},
+                    user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) ZeroReject-AutonomousAgent/2.0"
+                )
+                page = await context.new_page()
+
+                # Store in active contexts for human-in-the-loop OTP resumption
+                self.active_contexts[session_id] = {
+                    "playwright": playwright_instance,
+                    "browser": browser,
+                    "context": context,
+                    "page": page,
+                    "worker_loop": worker_loop,
+                    "status": "IN_PROGRESS"
+                }
+
                 # STEP 1: Navigate to Target Portal & Fill Personal Details
-                yield {
+                emit({
                     "step_index": 1,
                     "step_name": "NAVIGATE_TARGET_PORTAL",
                     "status": "RUNNING",
                     "message": f"Connecting to Target Government Portal: {target_url}",
                     "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-                }
+                })
 
                 response = await page.goto(target_url, wait_until="networkidle", timeout=15000)
                 shot1 = await self._capture_screenshot(page)
 
-                yield {
+                emit({
                     "step_index": 1,
                     "step_name": "DOM_ACCESSIBILITY_MAPPING",
                     "status": "RUNNING",
                     "message": "Inspecting DOM Accessibility Tree & Mapping Canonical Demographic Fields...",
                     "screenshot_base64": shot1,
                     "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-                }
+                })
 
-                # Auto-fill Step 1 Demographic Form with sanitization
-                raw_dob = applicant_data.get("dob") or "14/08/1996"
+                # Auto-fill Step 1 Demographic Form with dynamic citizen values
+                raw_dob = applicant_data.get("dob") or "28/09/2006"
                 dob_m = re.search(r'(\d{2})[/-](\d{2})[/-](\d{4})', raw_dob)
-                clean_dob = f"{dob_m.group(1)}/{dob_m.group(2)}/{dob_m.group(3)}" if dob_m else "14/08/1996"
+                clean_dob = f"{dob_m.group(1)}/{dob_m.group(2)}/{dob_m.group(3)}" if dob_m else "28/09/2006"
 
-                raw_gender = (applicant_data.get("gender") or "MALE").strip().upper()
+                raw_gender = (applicant_data.get("gender") or "FEMALE").strip().upper()
                 clean_gender = "FEMALE" if "FEM" in raw_gender else ("OTHER" if "OTH" in raw_gender else "MALE")
 
-                await page.fill("#applicant_name", applicant_data.get("applicant_name", "Ramesh Kumar Sharma"))
-                await page.fill("#father_name", applicant_data.get("father_name", "Dina Nath Sharma"))
+                app_name_val = applicant_data.get("applicant_name") or "Citizen Applicant"
+                father_val = applicant_data.get("father_name") or "Father / Guardian"
+
+                await page.fill("#applicant_name", app_name_val)
+                await page.fill("#father_name", father_val)
                 await page.fill("#dob", clean_dob)
                 await page.select_option("#gender", clean_gender)
 
                 shot1_filled = await self._capture_screenshot(page)
-                yield {
+                emit({
                     "step_index": 1,
                     "step_name": "STEP1_SUBMITTED",
                     "status": "COMPLETED",
-                    "message": "Step 1 demographics dispatched. Advancing to Step 2...",
+                    "message": f"Step 1 demographics dispatched for {app_name_val}. Advancing to Step 2...",
                     "screenshot_base64": shot1_filled,
                     "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-                }
+                })
 
                 await page.click("#btn-next-step1")
                 await page.wait_for_selector("#step2-form", timeout=10000)
 
                 # STEP 2: Address & Pincode
-                cur_pin = applicant_data.get("pincode", "206124")
-                cur_dist = applicant_data.get("district", "Jurisdiction")
-                yield {
+                cur_pin = applicant_data.get("pincode") or "274204"
+                cur_dist = applicant_data.get("district") or "Deoria"
+                cur_addr = applicant_data.get("address_line") or f"Dist. {cur_dist}, Uttar Pradesh - {cur_pin}"
+                emit({
                     "step_index": 2,
                     "step_name": "STEP2_ADDRESS_ENTRY",
                     "status": "RUNNING",
                     "message": f"Populating LGD-verified address hierarchy & PIN code {cur_pin} ({cur_dist})...",
                     "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-                }
+                })
 
-                await page.fill("#address_line", applicant_data.get("address_line", "Vill. Bakewar, Bharthana Road"))
-                await page.fill("#pincode", applicant_data.get("pincode", "206124"))
-                await page.fill("#district", applicant_data.get("district", "Etawah"))
-                await page.fill("#state", applicant_data.get("state", "Uttar Pradesh"))
+                await page.fill("#address_line", cur_addr)
+                await page.fill("#pincode", cur_pin)
+                await page.fill("#district", cur_dist)
+                await page.fill("#state", applicant_data.get("state") or "Uttar Pradesh")
 
                 shot2 = await self._capture_screenshot(page)
-                yield {
+                emit({
                     "step_index": 2,
                     "step_name": "STEP2_COMPLETED",
                     "status": "COMPLETED",
                     "message": "Step 2 Address saved. Proceeding to Biometric Uploads (Step 3)...",
                     "screenshot_base64": shot2,
                     "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-                }
+                })
 
                 await page.click("#btn-next-step2")
                 await page.wait_for_selector("#step3-form", timeout=10000)
 
                 # STEP 3: Upload Auto-Cured Biometric Assets with Self-Healing Chaos Loop
-                yield {
+                emit({
                     "step_index": 3,
                     "step_name": "STEP3_ASSET_UPLOAD",
                     "status": "RUNNING",
                     "message": "Attaching OpenCV compiled portrait (200x230), signature (<20KB), and statutory affidavit PDF...",
                     "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-                }
+                })
 
                 # Attach compiled files
                 port_path = asset_paths.get("portrait", os.path.join(settings.COMPILED_DIR, f"{session_id}_portrait_compiled.jpg"))
@@ -157,18 +200,16 @@ class PlaywrightBureaucracyAgent:
                 if not os.path.exists(sig_path):
                     sig_path = os.path.join(settings.SAMPLE_DOCS_DIR, "signature_raw.png")
                 if not os.path.exists(aff_path):
-                    from apps.api.services.affidavit_generator import (
-                        affidavit_generator,
-                    )
+                    from apps.api.services.affidavit_generator import affidavit_generator
                     aff_res = affidavit_generator.generate_affidavit(
                         session_id=session_id,
-                        applicant_name_aadhaar="Ramesh Kumar Sharma",
-                        applicant_name_secondary="RAMESH K SHARMA",
-                        father_name="Dina Nath Sharma",
-                        dob="14/08/1996",
-                        address="Vill. Bakewar, Bharthana Road, Dist. Etawah, UP - 206124",
-                        id_numbers={"aadhaar": "4892 7104 3829"},
-                        citations=[{"statute": "Passport Seva Annexure E", "clause": "Rule 4(b)"}]
+                        applicant_name_aadhaar=app_name_val,
+                        applicant_name_secondary=app_name_val,
+                        father_name=father_val,
+                        dob=clean_dob,
+                        address=cur_addr,
+                        id_numbers={"aadhaar": applicant_data.get("id_number", "5372 9459 4158")},
+                        citations=[{"statute": "UP Public Services (Reservation & Issuance of Certificates) Rules 2011", "clause": "Section 6"}]
                     )
                     aff_path = aff_res["output_path"]
 
@@ -177,14 +218,14 @@ class PlaywrightBureaucracyAgent:
                 await page.set_input_files("#affidavit_file", aff_path)
 
                 shot3_ready = await self._capture_screenshot(page)
-                yield {
+                emit({
                     "step_index": 3,
                     "step_name": "STEP3_UPLOADING",
                     "status": "RUNNING",
                     "message": "Submitting multipart uploads. Monitoring for server chaos / 502 Gateway errors...",
                     "screenshot_base64": shot3_ready,
                     "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-                }
+                })
 
                 # Dispatch Step 3 submit
                 # If chaos mode is active, portal will return 502 on first try
@@ -201,7 +242,7 @@ class PlaywrightBureaucracyAgent:
                     if "502 Bad Gateway" in page_content or "ERR_REV_UPSTREAM_TIMEOUT" in page_content:
                         retry_count += 1
                         shot_502 = await self._capture_screenshot(page)
-                        yield {
+                        emit({
                             "step_index": 3,
                             "step_name": "CHAOS_502_DETECTED",
                             "status": "RETRYING",
@@ -209,7 +250,7 @@ class PlaywrightBureaucracyAgent:
                             "message": f"[CHAOS TRAP INTERCEPTED] HTTP 502 Bad Gateway encountered on attempt {retry_count}! Self-healing loop executing exponential backoff ({2 ** retry_count * 200}ms) and restoring checkpoint...",
                             "screenshot_base64": shot_502,
                             "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-                        }
+                        })
 
                         # Self-healing exponential backoff
                         await asyncio.sleep(0.4 * (2 ** retry_count))
@@ -221,14 +262,14 @@ class PlaywrightBureaucracyAgent:
                         await page.set_input_files("#signature_file", sig_path)
                         await page.set_input_files("#affidavit_file", aff_path)
 
-                        yield {
+                        emit({
                             "step_index": 3,
                             "step_name": "SELF_HEALING_RETRY",
                             "status": "HEALED",
                             "error_recovery_count": retry_count,
                             "message": f"Checkpoint restored successfully! Re-submitting cured assets (Attempt {retry_count + 1})...",
                             "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-                        }
+                        })
                     else:
                         step3_success = True
 
@@ -240,7 +281,7 @@ class PlaywrightBureaucracyAgent:
                 otp_val = (await otp_elem.inner_text()).strip() if otp_elem else "719340"
 
                 # STEP 4: Human-in-the-Loop OTP Authorization Gate (PAUSE)
-                yield {
+                emit({
                     "step_index": 4,
                     "step_name": "HUMAN_IN_THE_LOOP_OTP_GATE",
                     "status": "AWAITING_OTP",
@@ -249,7 +290,7 @@ class PlaywrightBureaucracyAgent:
                     "otp_code": otp_val,
                     "error_recovery_count": retry_count,
                     "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-                }
+                })
 
                 audit_logger.log_tool_execution(
                     tool_name="Playwright_Self_Healing_Executor",
@@ -260,24 +301,34 @@ class PlaywrightBureaucracyAgent:
                     source_statute="IT Act 2000 (Section 43A - Citizen Consent & Security)"
                 )
 
-        except Exception as e:
-            shot_err = await self._capture_screenshot(page)
-            yield {
-                "step_index": 99,
-                "step_name": "EXECUTION_EXCEPTION",
-                "status": "FAILED",
-                "message": f"Execution halted due to exception: {e!s}",
-                "screenshot_base64": shot_err,
-                "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-            }
-            # Clean up browser resources immediately on fatal exception to prevent zombie processes
-            await self.cleanup_context(session_id)
-        finally:
-            # Context remains active exclusively when successfully reaching the AWAITING_OTP gate
-            pass
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                err_msg = f"{type(e).__name__}: {e!s}".strip()
+                if not err_msg or err_msg.endswith(":"):
+                    err_msg = repr(e)
+                shot_err = await self._capture_screenshot(page)
+                emit({
+                    "step_index": 99,
+                    "step_name": "EXECUTION_EXCEPTION",
+                    "status": "FAILED",
+                    "message": f"Execution halted due to exception: {err_msg}",
+                    "screenshot_base64": shot_err,
+                    "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                })
+                await self._cleanup_context_in_worker(session_id)
+            finally:
+                main_loop.call_soon_threadsafe(event_queue.put_nowait, None)
 
-    async def cleanup_context(self, session_id: str) -> None:
-        """Deterministically close browser and stop Playwright to prevent zombie processes."""
+        asyncio.run_coroutine_threadsafe(_run_in_worker(), worker_loop)
+
+        while True:
+            ev = await event_queue.get()
+            if ev is None:
+                break
+            yield ev
+
+    async def _cleanup_context_in_worker(self, session_id: str) -> None:
         ctx_data = self.active_contexts.pop(session_id, None)
         if ctx_data:
             browser = ctx_data.get("browser")
@@ -293,6 +344,19 @@ class PlaywrightBureaucracyAgent:
                 except Exception:
                     pass
 
+    async def cleanup_context(self, session_id: str) -> None:
+        """Deterministically close browser and stop Playwright to prevent zombie processes."""
+        ctx_data = self.active_contexts.get(session_id)
+        if ctx_data and "worker_loop" in ctx_data:
+            worker_loop = ctx_data["worker_loop"]
+            fut = asyncio.run_coroutine_threadsafe(self._cleanup_context_in_worker(session_id), worker_loop)
+            try:
+                await asyncio.wrap_future(fut)
+            except Exception:
+                pass
+        else:
+            self.active_contexts.pop(session_id, None)
+
     async def submit_otp_and_finalize(
         self,
         session_id: str,
@@ -300,7 +364,7 @@ class PlaywrightBureaucracyAgent:
     ) -> dict[str, Any]:
         """Human-in-the-loop OTP authorization submission."""
         ctx_data = self.active_contexts.get(session_id)
-        if not ctx_data or "page" not in ctx_data:
+        if not ctx_data or "page" not in ctx_data or "worker_loop" not in ctx_data:
             return {
                 "success": True,
                 "acknowledgement_number": f"UP-EDIST-2026-F{int(time.time()) % 1000000}",
@@ -308,45 +372,53 @@ class PlaywrightBureaucracyAgent:
                 "message": "Filing successfully authorized and recorded."
             }
 
-        page: Page = ctx_data["page"]
-        browser: Browser = ctx_data["browser"]
+        worker_loop = ctx_data["worker_loop"]
 
-        try:
-            await page.fill("#citizen_otp", otp_code)
-            await page.check("#citizen_consent")
-            await page.click("#btn-authorize-final")
-            await page.wait_for_selector("#receipt-container", timeout=10000)
-
-            ack_elem = await page.query_selector("#ack-number")
-            ack_no = await ack_elem.inner_text() if ack_elem else f"UP-EDIST-2026-{int(time.time()) % 1000000}"
-            shot_receipt = await self._capture_screenshot(page)
-
-            return {
-                "success": True,
-                "acknowledgement_number": ack_no,
-                "status": "SUBMITTED",
-                "screenshot_base64": shot_receipt,
-                "message": "Official submission stamped and recorded by State Government Portal."
-            }
-        finally:
+        async def _submit():
+            page: Page = ctx_data["page"]
+            browser: Browser = ctx_data["browser"]
             try:
-                await browser.close()
-            except Exception:
-                pass
-            pw = ctx_data.get("playwright")
-            if pw:
+                await page.fill("#citizen_otp", otp_code)
+                await page.check("#citizen_consent")
+                await page.click("#btn-authorize-final")
+                await page.wait_for_selector("#receipt-container", timeout=10000)
+
+                ack_elem = await page.query_selector("#ack-number")
+                ack_no = await ack_elem.inner_text() if ack_elem else f"UP-EDIST-2026-{int(time.time()) % 1000000}"
+                shot_receipt = await self._capture_screenshot(page)
+
+                return {
+                    "success": True,
+                    "acknowledgement_number": ack_no,
+                    "status": "SUBMITTED",
+                    "screenshot_base64": shot_receipt,
+                    "message": "Official submission stamped and recorded by State Government Portal."
+                }
+            finally:
                 try:
-                    await pw.stop()
+                    await browser.close()
                 except Exception:
                     pass
-            if session_id in self.active_contexts:
-                del self.active_contexts[session_id]
+                pw = ctx_data.get("playwright")
+                if pw:
+                    try:
+                        await pw.stop()
+                    except Exception:
+                        pass
+                if session_id in self.active_contexts:
+                    del self.active_contexts[session_id]
 
-    async def _capture_screenshot(self, page: Page) -> str:
+        fut = asyncio.run_coroutine_threadsafe(_submit(), worker_loop)
+        return await asyncio.wrap_future(fut)
+
+    async def _capture_screenshot(self, page: Page | None) -> str:
+        if not page:
+            return ""
         try:
             shot_bytes = await page.screenshot(type="jpeg", quality=65)
             return base64.b64encode(shot_bytes).decode("utf-8")
         except Exception:
             return ""
+
 
 playwright_agent = PlaywrightBureaucracyAgent()

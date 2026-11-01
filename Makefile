@@ -1,25 +1,36 @@
 .PHONY: setup install dev test lint assets audit clean dev-api dev-gov dev-web seed
 
 VENV ?= .venv
-PYTHON ?= $(VENV)/bin/python3
-PIP ?= $(VENV)/bin/pip
-PYTEST ?= $(VENV)/bin/pytest
-PLAYWRIGHT ?= $(VENV)/bin/playwright
-RUFF ?= $(VENV)/bin/ruff
+
+ifeq ($(OS),Windows_NT)
+    PYTHON = $(VENV)/Scripts/python.exe
+    PIP = $(VENV)/Scripts/pip.exe
+    PYTEST = $(VENV)/Scripts/pytest.exe
+    PLAYWRIGHT = $(VENV)/Scripts/playwright.exe
+    RUFF = $(VENV)/Scripts/ruff.exe
+    NPM = cmd.exe /c npm
+else
+    PYTHON = $(VENV)/bin/python3
+    PIP = $(VENV)/bin/pip
+    PYTEST = $(VENV)/bin/pytest
+    PLAYWRIGHT = $(VENV)/bin/playwright
+    RUFF = $(VENV)/bin/ruff
+    NPM = npm
+endif
 
 setup: install assets
 	@echo "==> ZeroReject (PramaanFix) environment is fully configured!"
 
 install:
 	@echo "==> Creating Python virtual environment..."
-	@python3 -m venv $(VENV)
+	@py -3.11 -m venv $(VENV)
 	@echo "==> Installing Python dependencies..."
 	@$(PIP) install --upgrade pip
 	@$(PIP) install -r apps/api/requirements.txt
 	@echo "==> Installing Playwright Chromium browser..."
 	@$(PLAYWRIGHT) install chromium
 	@echo "==> Installing Web UI dependencies..."
-	@cd apps/web && npm install
+	@cd apps/web && $(NPM) install
 	@echo "==> Generating real rasterized sample citizen documents..."
 	@$(PYTHON) scripts/generate_sample_docs.py
 
@@ -39,13 +50,13 @@ lint:
 	@echo "==> Running Ruff linter on Python services..."
 	@$(RUFF) check .
 	@echo "==> Verifying Next.js TypeScript strict types & production build..."
-	@cd apps/web && rm -rf .next && npm run build
+	@cd apps/web && $(NPM) run build
 
 audit:
 	@echo "==> Executing full Senior Engineering audit sweep (lint + test + build)..."
 	@$(RUFF) check .
 	@PYTHONPATH=. $(PYTEST) apps/api/tests/ -q
-	@cd apps/web && rm -rf .next && npm run build
+	@cd apps/web && $(NPM) run build
 	@echo "==> Audit complete! Zero errors and zero warnings across all layers."
 
 dev-api:
@@ -58,7 +69,7 @@ dev-gov:
 
 dev-web:
 	@echo "==> Starting Next.js 15 Web Application on port 3000..."
-	@cd apps/web && npm run dev
+	@cd apps/web && $(NPM) run dev
 
 dev:
 	@echo "==> Launching full ZeroReject Stack (API :8000, Gov Target :8090, Web :3000)..."

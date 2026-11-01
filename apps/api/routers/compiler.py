@@ -181,12 +181,16 @@ async def compile_portal_assets(
         raw_portrait_path = os.path.join(settings.SAMPLE_DOCS_DIR, "portrait_raw.jpg")
         port_doc_hint = "portrait"
 
-    # Resolve signature input: Marksheets have NO applicant signature! Never use marksheet as signature!
-    is_pan_a_marksheet = pan_doc and (
-        "marksheet" in pan_doc.doc_type.lower()
-        or (pan_doc.id_number and pan_doc.id_number.startswith("Roll"))
-        or any(k in (pan_doc.original_filename or "").lower() for k in ["marksheet", "cbse", "10th", "12th"])
-        or any(k in str(pan_doc.extraction_details).lower() for k in ["cbse", "marksheet", "secondary school", "roll no"])
+    # Resolve signature input: Marksheets and educational certificates have NO applicant signature!
+    # Never use marksheet as applicant signature under any circumstance.
+    is_pan_a_marksheet = bool(
+        marksheet_doc is not None
+        or (pan_doc and (
+            "marksheet" in pan_doc.doc_type.lower()
+            or (pan_doc.id_number and str(pan_doc.id_number).startswith("Roll"))
+            or any(k in (pan_doc.original_filename or "").lower() for k in ["marksheet", "cbse", "10th", "12th", "screenshot"])
+            or any(k in str(pan_doc.extraction_details).lower() for k in ["cbse", "marksheet", "secondary school", "roll no", "examination"])
+        ))
     )
 
     if user_sig and os.path.exists(user_sig.file_path):

@@ -23,7 +23,7 @@ type PortalProfileKey = 'e_district_income' | 'national_scholarship' | 'passport
 export default function AutomationLabPage() {
   const [selectedPortal, setSelectedPortal] = useState<PortalProfileKey>('e_district_income');
   const [sessionId, setSessionId] = useState<string>('sess_demo_live');
-  const [executionStatus, setExecutionStatus] = useState<'IDLE' | 'EXECUTING' | 'HEALING' | 'AWAITING_OTP' | 'VERIFIED'>('IDLE');
+  const [executionStatus, setExecutionStatus] = useState<'IDLE' | 'EXECUTING' | 'HEALING' | 'AWAITING_OTP' | 'VERIFIED' | 'FAILED'>('IDLE');
 
   const portalOptions: { key: PortalProfileKey; name: string; dept: string; url: string; badge: string }[] = [
     {

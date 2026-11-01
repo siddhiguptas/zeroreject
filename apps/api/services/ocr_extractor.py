@@ -79,6 +79,8 @@ class FreeMultimodalOCRExtractor:
 
         # Stage 2: Free Local Optical Extraction
         raw_text, ocr_engine_used = self._run_local_ocr(orig_gray, gray_img, enhanced_img)
+        if roi_meta.get("pdf_direct_text"):
+            raw_text = f"{roi_meta['pdf_direct_text']}\n{raw_text}".strip()
 
         # Stage 3: Deterministic Civic Document Entity & Checksum Parsing
         extracted_data = self._parse_civic_entities(raw_text, doc_type_hint, roi_meta)
@@ -110,16 +112,46 @@ class FreeMultimodalOCRExtractor:
         Preserves original grayscale, upscales small scans, applies bilateral filter and CLAHE contrast enhancement,
         and isolates portrait photo and signature contours.
         """
+        # 1. Image and PDF Acquisition
         if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
             raise DocumentIngestionError("Uploaded file is empty (0 bytes) or does not exist on disk.")
 
-        try:
-            img = cv2.imread(file_path)
-            if img is None:
-                pil_img = Image.open(file_path).convert("RGB")
-                img = np.array(pil_img)[:, :, ::-1]
-        except Exception as e:
-            raise DocumentIngestionError(f"Unable to decode document image ({e!s}). Please provide an uncorrupted PNG, JPEG, or PDF.")
+        img = None
+        pdf_direct_text = ""
+        is_pdf = file_path.lower().endswith(".pdf")
+        if not is_pdf:
+            try:
+                with open(file_path, "rb") as f:
+                    hdr = f.read(5)
+                    if hdr == b"%PDF-":
+                        is_pdf = True
+            except Exception:
+                pass
+
+        if is_pdf:
+            try:
+                import pypdfium2 as pdfium
+                pdf = pdfium.PdfDocument(file_path)
+                if len(pdf) > 0:
+                    page = pdf[0]
+                    pil_img = page.render(scale=2.5).to_pil().convert("RGB")
+                    img = np.array(pil_img)[:, :, ::-1]  # RGB to BGR for OpenCV
+                    try:
+                        textpage = page.get_textpage()
+                        pdf_direct_text = textpage.get_text_range() or ""
+                    except Exception:
+                        pdf_direct_text = ""
+            except Exception as e:
+                raise DocumentIngestionError(f"Unable to render PDF document ({e!s}). Please provide an uncorrupted PDF or scan.")
+
+        if img is None:
+            try:
+                img = cv2.imread(file_path)
+                if img is None:
+                    pil_img = Image.open(file_path).convert("RGB")
+                    img = np.array(pil_img)[:, :, ::-1]
+            except Exception as e:
+                raise DocumentIngestionError(f"Unable to decode document image ({e!s}). Please provide an uncorrupted PNG, JPEG, or PDF.")
 
         if img is None or img.size == 0:
             raise DocumentIngestionError("Decoded document contains no pixel data (0x0).")
@@ -143,7 +175,7 @@ class FreeMultimodalOCRExtractor:
         enhanced = clahe.apply(filtered)
 
         # 3. Detect Face / Portrait ROI (Upper left quadrant for Aadhaar, right/left for IDs)
-        roi_meta: dict[str, Any] = {}
+        roi_meta: dict[str, Any] = {"pdf_direct_text": pdf_direct_text}
         cascade_path = os.path.join(cv2.data.haarcascades, "haarcascade_frontalface_default.xml")
         face_found = False
         if os.path.exists(cascade_path):
@@ -329,6 +361,7 @@ class FreeMultimodalOCRExtractor:
                     data.district = cand_dist.title()
 
             # Check known districts and talukas in raw OCR on back
+            matched_name = None
             known_dist_match = re.search(r'\b(Deoria|Deora|Rudrapur|Gorakhpur|Lucknow|Varanasi|Kanpur|Etawah|Agra|Meerut|Prayagraj|Faizabad|Ayodhya|Bareilly|Aligarh|Ghaziabad|Noida)\b', text, re.IGNORECASE)
             if known_dist_match:
                 matched_name = known_dist_match.group(1).title()
@@ -340,7 +373,7 @@ class FreeMultimodalOCRExtractor:
 
             if not data.district or len(data.district) <= 3:
                 # Common pattern in Aadhaar address: "Taluka/Town, District, State - Pincode" e.g. "Rudrapur, Deoria, Uttar Pradesh - 274204"
-                dist_pattern = re.search(r'([A-Za-z]{3,20})[,\s.]*([A-Za-z]{3,20})?[,\s.]+(?:Uttar\s*Pradesh|UP)[,\s\-]+(?:[1-9][0-9]{5})?', text, re.IGNORECASE)
+                dist_pattern = re.search(r'([A-Za-z]{3,20})[,\s.]*([A-Za-z]{3,20})?[,\s.]+(?:Uttar\s*Pradesh|UP|Delhi|Haryana|Bihar|Maharashtra|Karnataka|Rajasthan)[,\s\-]+(?:[1-9][0-9]{5})?', text, re.IGNORECASE)
                 if dist_pattern:
                     t_cand = dist_pattern.group(1).strip()
                     d_cand = (dist_pattern.group(2) or "").strip()
@@ -349,9 +382,19 @@ class FreeMultimodalOCRExtractor:
                         data.taluka = t_cand.title()
                     elif not any(ign in t_cand.upper() for ign in ["PRADESH", "UTTAR", "STATE", "INDIA", "HELP", "UIDAI"]) and len(t_cand) > 3:
                         data.district = t_cand.title()
-                    data.district = "Deoria"
-                else:
+                elif matched_name:
                     data.district = matched_name
+
+            # Dynamic PIN-to-LGD jurisdiction resolution:
+            # If PIN code was extracted, resolve authoritative district and taluka
+            if data.pincode:
+                from apps.api.services.phonetic_reconciler import AUTHORITATIVE_POSTAL_DIRECTORY
+                if data.pincode in AUTHORITATIVE_POSTAL_DIRECTORY:
+                    p_taluka, p_dist, p_state, _ = AUTHORITATIVE_POSTAL_DIRECTORY[data.pincode]
+                    if not data.district or data.district.lower() == "unknown" or data.district.lower() not in p_dist.lower():
+                        data.district = p_dist
+                    if not data.taluka:
+                        data.taluka = p_taluka
 
         # 8. Parse Applicant Full Name
         # If this is specifically Aadhaar Back, do not attempt to parse applicant name (back only has C/O guardian & address)
@@ -427,8 +470,8 @@ class FreeMultimodalOCRExtractor:
                     fath_match = re.search(r'(?:Father(?:\x27s)?\s*(?:/\s*Guardian(?:\x27s)?)?\s*Name|Father(?:\x27s)?\s*Name|पिता(?:\s*/\s*संरक्षक)?(?:\s*का)?\s*नाम)\s*[:\-\s]*([A-Za-z\s]{3,40})(?=\n|$|\bDate\b|\bSchool\b|\bMother\b)', text, re.IGNORECASE)
                     if fath_match:
                         clean_fath = re.sub(r'[^a-zA-Z\s]', '', fath_match.group(1)).strip()
-                        toks_f = [t for t in clean_fath.split() if len(t) >= 2]
-                        if len(toks_f) >= 2 and not any(ign in clean_fath.upper() for ign in ["DATE", "BIRTH", "SCHOOL", "MOTHER", "NAME"]):
+                        toks_f = [t for t in clean_fath.split() if len(t) >= 3 and t.upper() not in ["VG", "IY", "IG", "DATE", "BIRTH", "SCHOOL", "MOTHER", "NAME"]]
+                        if len(toks_f) >= 2:
                             data.father_or_spouse_name = " ".join(toks_f)
 
                 # 4. Marksheet Roll Number
@@ -437,26 +480,57 @@ class FreeMultimodalOCRExtractor:
                     data.id_number = f"Roll: {roll_match.group(1)}"
                     data.detected_script = "10th Marksheet / CBSE"
 
-            # Check Priority A2: PAN Card Layout (Look for uppercase Name after PAN number line)
-            if not data.full_name and pan_match:
-                pan_idx = -1
-                for i, l in enumerate(lines):
-                    if pan_match.group(1) in l:
-                        pan_idx = i
-                        break
-                if pan_idx != -1:
-                    for j in range(pan_idx + 1, min(pan_idx + 10, len(lines))):
-                        cand = lines[j]
-                        if any(ign in cand.upper() for ign in [
-                            "INCOME", "TAX", "DEPARTMENT", "GOVT", "INDIA", "PERMANENT",
-                            "ACCOUNT", "CARD", "MINOR", "NAME", "FATHER", "SIGNATURE", "DATE"
-                        ]):
-                            continue
-                        cand_clean = re.sub(r'[^A-Z\s]', '', cand).strip()
-                        tokens = cand_clean.split()
-                        if len(tokens) >= 2 and all(len(t) >= 2 for t in tokens):
-                            data.full_name = cand_clean
-                            break
+            # Check Priority A2: PAN Card Layout (Deterministic 'Name' / 'Father's Name' labeled anchors)
+            if pan_match or doc_type_hint == "pan" or "INCOME TAX" in text.upper():
+                # 1. Parse Applicant Name from 'Name' / 'नाम' anchor
+                if not data.full_name:
+                    for i, line in enumerate(lines):
+                        clean_upper = line.upper()
+                        if re.search(r'(?:^|[^a-zA-Z])(?:Name|नाम)(?:$|[^a-zA-Z])', line, re.I) and not any(k in clean_upper for k in ['FATHER', 'MOTHER', 'GUARDIAN', 'पिता', 'माता', 'DEPARTMENT', 'CARD']):
+                            if ':' in line:
+                                after_col = line.split(':', 1)[1].strip()
+                                cand_clean = re.sub(r'[^A-Za-z\s]', '', after_col).strip()
+                                toks = [t for t in cand_clean.split() if len(t) >= 2]
+                                if len(toks) >= 2 and not any(ign in cand_clean.upper() for ign in ['PERMANENT', 'ACCOUNT', 'CARD', 'INCOME', 'TAX', 'GOVT', 'INDIA', 'FATHER', 'SIGNATURE', 'MINOR']):
+                                    data.full_name = cand_clean
+                                    break
+                            for j in range(i + 1, min(i + 5, len(lines))):
+                                next_l = lines[j]
+                                if any(ign in next_l.upper() for ign in ['PERMANENT', 'ACCOUNT', 'CARD', 'INCOME', 'TAX', 'GOVT', 'INDIA', 'FATHER', 'SIGNATURE', 'MINOR', 'DATE', 'BIRTH']):
+                                    continue
+                                cand_clean = re.sub(r'[^A-Za-z\s]', '', next_l).strip()
+                                toks = [t for t in cand_clean.split() if len(t) >= 2]
+                                if len(toks) >= 2 and all(len(t) >= 2 for t in toks):
+                                    data.full_name = cand_clean
+                                    break
+                            if data.full_name:
+                                break
+
+                # 2. Parse Father's Name from 'Father' / 'पिता' anchor
+                if not data.father_or_spouse_name:
+                    for i, line in enumerate(lines):
+                        clean_upper = line.upper()
+                        if any(k in clean_upper for k in ['FATHER', 'GUARDIAN', 'पिता', 'संरक्षक']):
+                            inline_m = re.search(r'(?:Father|Guardian|पिता).*?Name[:\s]+([A-Za-z\s]{3,35})', line, re.I)
+                            if inline_m:
+                                cand = inline_m.group(1).strip()
+                                toks = [t for t in cand.split() if len(t) >= 3 and t.isalpha() and t.upper() not in ['DATE', 'BIRTH', 'SIGNATURE', 'CARD', 'NAME', 'PHOTO', 'VG', 'IY', 'IG']]
+                                if len(toks) >= 2:
+                                    cand_clean = ' '.join(toks)
+                                    if cand_clean.upper() != (data.full_name or '').upper():
+                                        data.father_or_spouse_name = cand_clean
+                                        break
+                            for j in range(i + 1, min(i + 5, len(lines))):
+                                next_l = lines[j]
+                                if any(ign in next_l.upper() for ign in ['DATE', 'BIRTH', 'SIGNATURE', 'PERMANENT', 'ACCOUNT', 'CARD', 'PHOTO']):
+                                    continue
+                                cand_clean = re.sub(r'[^A-Za-z\s]', '', next_l).strip()
+                                toks = [t for t in cand_clean.split() if len(t) >= 3 and t.isalpha() and t.upper() not in ['DATE', 'BIRTH', 'SIGNATURE', 'CARD', 'NAME', 'PHOTO', 'VG', 'IY', 'IG']]
+                                if len(toks) >= 2 and cand_clean.upper() != (data.full_name or '').upper():
+                                    data.father_or_spouse_name = cand_clean
+                                    break
+                            if data.father_or_spouse_name:
+                                break
 
             # Check Priority B1: Aadhaar Front TitleCase multi-token name immediately above DOB
             if not data.full_name and (doc_type_hint in ["aadhaar", "aadhaar_front"] or ("Aadhaar" in text or "UIDAI" in text or "DOB" in text)):
@@ -538,18 +612,33 @@ class FreeMultimodalOCRExtractor:
                             data.full_name = cand_clean
                             break
 
-        # Check Priority D: Father's Name from PAN labeled anchor or subsequent line
+        # Check Priority D: Father's Name from Marksheet / PAN labeled anchor or subsequent line
         if not data.father_or_spouse_name:
-            for i, line in enumerate(lines):
-                if any(k in line.upper() for k in ["FATHER'S NAME", "FATHER NAME", "पिता का नाम", "GUARDIAN'S NAME"]):
-                    candidate_father = line.split(":", 1)[1].strip() if ":" in line else (lines[i+1].strip() if i+1 < len(lines) else "")
-                    fcand_clean = re.sub(r'[^a-zA-Z\s]', '', candidate_father).strip()
-                    if len(fcand_clean) >= 3 and fcand_clean != data.full_name and not any(ign in fcand_clean.upper().replace(" ", "") for ign in [
-                        "SIGNATURE", "INCOME", "TAX", "DEPARTMENT", "TAXDEPARTMENT", "DATE", "BIRTH", "CARD",
-                        "PERMANENT", "ACCOUNT", "GOVT", "INDIA", "STRAY", "MINOR", "FATHER", "MOTHER", "SCHOOL", "COLLEGE"
-                    ]):
-                        data.father_or_spouse_name = fcand_clean
-                        break
+            # Priority D1: Inline regex matching "Father's / Guardian's Name RAJ KUMAR GUPTA" or with colons
+            for line in lines:
+                m_inline = re.search(r'(?:Father|Guardian).*?Name[:\s]+([A-Za-z\s]{3,35})', line, re.IGNORECASE)
+                if m_inline:
+                    cand = m_inline.group(1).strip()
+                    toks = [t for t in cand.split() if len(t) >= 3 and t.isalpha() and t.upper() not in [
+                        'DATED', 'ROLL', 'PASS', 'MOTHER', 'RESULT', 'NAME', 'EXAMINATION', 'CONTROLLER', 'CERTIFY'
+                    ]]
+                    if len(toks) >= 2:
+                        cand_father_clean = " ".join(toks)
+                        if cand_father_clean.upper() != (data.full_name or "").upper():
+                            data.father_or_spouse_name = cand_father_clean
+                            break
+
+            if not data.father_or_spouse_name:
+                for i, line in enumerate(lines):
+                    if any(k in line.upper() for k in ["FATHER'S NAME", "FATHER NAME", "पिता का नाम", "GUARDIAN'S NAME", "GUARDIAN NAME"]):
+                        candidate_father = line.split(":", 1)[1].strip() if ":" in line else (lines[i+1].strip() if i+1 < len(lines) else "")
+                        fcand_clean = re.sub(r'[^a-zA-Z\s]', '', candidate_father).strip()
+                        if len(fcand_clean) >= 3 and fcand_clean != data.full_name and not any(ign in fcand_clean.upper().replace(" ", "") for ign in [
+                            "SIGNATURE", "INCOME", "TAX", "DEPARTMENT", "TAXDEPARTMENT", "DATE", "BIRTH", "CARD",
+                            "PERMANENT", "ACCOUNT", "GOVT", "INDIA", "STRAY", "MINOR", "FATHER", "MOTHER", "SCHOOL", "COLLEGE"
+                        ]):
+                            data.father_or_spouse_name = fcand_clean
+                            break
             # On PAN card layout: inspect lines after full_name for father's name
             if not data.father_or_spouse_name and pan_match:
                 cand_fathers = []

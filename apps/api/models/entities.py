@@ -89,27 +89,27 @@ class ReconciliationRecord(Base):
 
     @property
     def name_a(self) -> str:
-        return self.phonetic_matrix.get("original_a", "Ramesh Kumar Sharma")
+        return self.phonetic_matrix.get("original_a", "")
 
     @property
     def name_b(self) -> str:
-        return self.phonetic_matrix.get("original_b", "RAMESH K SHARMA")
+        return self.phonetic_matrix.get("original_b", "")
 
     @property
     def father_a(self) -> str:
-        return self.phonetic_matrix.get("father_a", "Dina Nath Sharma")
+        return self.phonetic_matrix.get("father_a", "")
 
     @property
     def dob_a(self) -> str:
-        return self.phonetic_matrix.get("dob_a", "14/08/1996")
+        return self.phonetic_matrix.get("dob_a", "")
 
     @property
     def pincode_query(self) -> str:
-        return self.postal_details.get("pincode", "206124")
+        return self.postal_details.get("pincode", "")
 
     @property
     def district_verified(self) -> str:
-        return self.postal_details.get("district", "Etawah")
+        return self.postal_details.get("district", "")
 
 class CompiledAsset(Base):
     __tablename__ = "compiled_assets"

@@ -12,7 +12,7 @@ export default function StudioPage() {
   const [telemetry, setTelemetry] = useState<JudgeTelemetryResponse | null>(null);
   const [isAuditDrawerOpen, setIsAuditDrawerOpen] = useState(false);
   const [playwrightStatus, setPlaywrightStatus] = useState<
-    'IDLE' | 'EXECUTING' | 'HEALING' | 'AWAITING_OTP' | 'VERIFIED'
+    'IDLE' | 'EXECUTING' | 'HEALING' | 'AWAITING_OTP' | 'VERIFIED' | 'FAILED'
   >('IDLE');
 
   const loadTelemetry = async () => {

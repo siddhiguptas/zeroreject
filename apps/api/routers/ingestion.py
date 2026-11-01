@@ -289,8 +289,8 @@ async def execute_4gate_reconciliation(
         or father_a
     )
     if not father_a and not father_b:
-        father_a = "Dina Nath Sharma"
-        father_b = "DINA NATH SHARMA"
+        father_a = ""
+        father_b = ""
     elif not father_a:
         father_a = father_b
     elif not father_b:
@@ -302,7 +302,7 @@ async def execute_4gate_reconciliation(
     dob_a = (
         (aadhaar_front_doc.dob if (aadhaar_front_doc and aadhaar_front_doc.dob) else None)
         or (secondary_doc.dob if (secondary_doc and secondary_doc.dob) else None)
-        or "14/08/1996"
+        or ""
     )
     dob_b = (secondary_doc.dob if (secondary_doc and secondary_doc.dob) else dob_a)
     dob_match = (dob_a == dob_b) if (dob_a and dob_b) else True

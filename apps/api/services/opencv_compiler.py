@@ -57,20 +57,44 @@ class OpenCVAssetCompiler:
         gray = cv2.cvtColor(image_np, cv2.COLOR_BGR2GRAY) if len(image_np.shape) == 3 else image_np
 
         if target_type == "portrait":
-            # 1. If uploaded image is a full Aadhaar card scan: face photograph is on the left
+            # 1. Try OpenCV Face Detection first across any document or photo upload
+            try:
+                if hasattr(cv2, "data") and hasattr(cv2, "CascadeClassifier"):
+                    cascade_xml = os.path.join(cv2.data.haarcascades, "haarcascade_frontalface_default.xml")
+                    if os.path.exists(cascade_xml):
+                        face_cascade = cv2.CascadeClassifier(cascade_xml)
+                        if not face_cascade.empty():
+                            faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(25, 25))
+                            if len(faces) > 0:
+                                # Pick the largest detected face
+                                fx, fy, fw, fh = max(faces, key=lambda f: f[2] * f[3])
+                                pad_top = int(fh * 0.45)
+                                pad_bottom = int(fh * 0.65)
+                                pad_sides = int(fw * 0.40)
+                                y1 = max(0, fy - pad_top)
+                                y2 = min(h_img, fy + fh + pad_bottom)
+                                x1 = max(0, fx - pad_sides)
+                                x2 = min(w_img, fx + fw + pad_sides)
+                                if y2 > y1 and x2 > x1:
+                                    return image_np[y1:y2, x1:x2]
+            except Exception:
+                pass
+
+            # 2. Geometric fallback if face detector didn't catch (e.g. low resolution Aadhaar scan):
             if doc_type_hint in ["aadhaar", "aadhaar_front"] or (w_img > h_img and (w_img / h_img) >= 1.25):
-                y1 = max(0, int(0.20 * h_img))
-                y2 = min(h_img, int(0.70 * h_img))
-                x1 = max(0, int(0.05 * w_img))
-                x2 = min(w_img, int(0.35 * w_img))
+                # On standard Aadhaar Front, the photo is located on the middle-left
+                y1 = max(0, int(0.22 * h_img))
+                y2 = min(h_img, int(0.78 * h_img))
+                x1 = max(0, int(0.06 * w_img))
+                x2 = min(w_img, int(0.38 * w_img))
                 if y2 > y1 and x2 > x1:
                     return image_np[y1:y2, x1:x2]
 
-            # 2. If uploaded image is a CBSE / 10th marksheet: face photograph is in the upper right
+            # 3. If uploaded image is a CBSE / 10th marksheet: face photograph is in the upper right
             elif doc_type_hint in ["marksheet", "educational_certificate"] or (h_img > w_img and (h_img / w_img) >= 1.25):
-                y1 = max(0, int(0.11 * h_img))
-                y2 = min(h_img, int(0.30 * h_img))
-                x1 = max(0, int(0.76 * w_img))
+                y1 = max(0, int(0.10 * h_img))
+                y2 = min(h_img, int(0.32 * h_img))
+                x1 = max(0, int(0.74 * w_img))
                 x2 = min(w_img, int(0.96 * w_img))
                 if y2 > y1 and x2 > x1:
                     return image_np[y1:y2, x1:x2]
@@ -78,20 +102,13 @@ class OpenCVAssetCompiler:
             return image_np
         
         if target_type == "signature":
-            # If input is a marksheet, marksheet has no applicant signature: fallback to verified sample signature
-            if doc_type_hint in ["marksheet", "educational_certificate"]:
-                fallback_sig = os.path.join(settings.SAMPLE_DOCS_DIR, "signature_raw.png")
-                if os.path.exists(fallback_sig):
-                    fb_img = cv2.imread(fallback_sig)
-                    if fb_img is not None:
-                        return fb_img
-                return image_np
-
-            # If input is a full PAN card, restrict search region to signature box (lower half)
+            # If doc_type_hint is already a signature scan, search the entire image
             search_gray = gray
             y_offset = 0
             x_offset = 0
-            if doc_type_hint == "pan" or (w_img > h_img and (w_img / h_img) >= 1.3):
+
+            # If input is a full PAN card, restrict search region to signature box (lower half)
+            if doc_type_hint == "pan" or (w_img > h_img and (w_img / h_img) >= 1.3 and doc_type_hint != "signature"):
                 y1 = int(0.60 * h_img)
                 y2 = min(h_img, int(0.95 * h_img))
                 x1 = int(0.40 * w_img)
@@ -239,11 +256,33 @@ class OpenCVAssetCompiler:
         min_bytes = int(min_kb * 1024)
         max_bytes = int(max_kb * 1024)
 
-        # 1. Load via OpenCV
-        img_np = cv2.imread(input_path)
+        # 1. Load via OpenCV or pypdfium2 if PDF
+        img_np = None
+        is_pdf = input_path.lower().endswith(".pdf")
+        if not is_pdf and os.path.exists(input_path):
+            try:
+                with open(input_path, "rb") as f:
+                    if f.read(5) == b"%PDF-":
+                        is_pdf = True
+            except Exception:
+                pass
+
+        if is_pdf:
+            try:
+                import pypdfium2 as pdfium
+                pdf = pdfium.PdfDocument(input_path)
+                if len(pdf) > 0:
+                    page = pdf[0]
+                    pil_temp = page.render(scale=2.5).to_pil().convert("RGB")
+                    img_np = np.array(pil_temp)[:, :, ::-1]
+            except Exception as e:
+                logger.warning(f"Failed to render PDF in opencv_compiler: {e}")
+
         if img_np is None:
-            pil_temp = Image.open(input_path).convert("RGB")
-            img_np = np.array(pil_temp)[:, :, ::-1]
+            img_np = cv2.imread(input_path)
+            if img_np is None:
+                pil_temp = Image.open(input_path).convert("RGB")
+                img_np = np.array(pil_temp)[:, :, ::-1]
 
         # 2. Deskew and crop contour
         deskewed = self.deskew_and_clean(img_np)

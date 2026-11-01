@@ -33,12 +33,14 @@ import { PhoneticGraphMatrix } from './PhoneticGraphMatrix';
 import { OpenCVCurePreview } from './OpenCVCurePreview';
 import { PlaywrightLiveConsole } from './PlaywrightLiveConsole';
 import { ErrorBoundary } from './ErrorBoundary';
+import { DigitalTwinWorkspace } from './DigitalTwinWorkspace';
 
 interface StudioWorkspaceProps {
-  onPlaywrightStatusChange?: (status: 'IDLE' | 'EXECUTING' | 'HEALING' | 'AWAITING_OTP' | 'VERIFIED') => void;
+  onPlaywrightStatusChange?: (status: 'IDLE' | 'EXECUTING' | 'HEALING' | 'AWAITING_OTP' | 'VERIFIED' | 'FAILED') => void;
 }
 
 export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightStatusChange }) => {
+  const [workspaceMode, setWorkspaceMode] = useState<'guided' | 'digital_twin'>('guided');
   const [activeStep, setActiveStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [workflowTarget, setWorkflowTarget] = useState('e_district_income');
   const [sessionId, setSessionId] = useState<string>('');
@@ -47,7 +49,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
   const [loadingPacket, setLoadingPacket] = useState(false);
   const [loadingCompile, setLoadingCompile] = useState(false);
   const [playwrightStatus, setPlaywrightStatus] = useState<
-    'IDLE' | 'EXECUTING' | 'HEALING' | 'AWAITING_OTP' | 'VERIFIED'
+    'IDLE' | 'EXECUTING' | 'HEALING' | 'AWAITING_OTP' | 'VERIFIED' | 'FAILED'
   >('IDLE');
   const [otpCode, setOtpCode] = useState('');
   const [receiptAck, setReceiptAck] = useState<string | null>(null);
@@ -89,9 +91,28 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
 
   const handleReconcileUploadedSession = async () => {
     if (!sessionId) {
-      setUploadError('Please upload at least one document before running audit.');
+      setUploadError('Please upload your documents before running audit.');
       return;
     }
+
+    const hasFront = Boolean(uploadedDocs['aadhaar_front'] || uploadedDocs['aadhaar']);
+    const hasBack = Boolean(uploadedDocs['aadhaar_back']);
+    const hasSec = Boolean(uploadedDocs['pan']);
+    const hasPhoto = Boolean(uploadedDocs['portrait']);
+    const hasSig = Boolean(uploadedDocs['signature']);
+
+    const missing: string[] = [];
+    if (!hasFront) missing.push('Aadhaar Front');
+    if (!hasBack) missing.push('Aadhaar Back');
+    if (!hasSec) missing.push('Secondary ID (Marksheet / PAN)');
+    if (!hasPhoto) missing.push('Citizen Photo');
+    if (!hasSig) missing.push('Signature Scan');
+
+    if (missing.length > 0) {
+      setUploadError(`Please upload all mandatory documents before running audit: ${missing.join(', ')}.`);
+      return;
+    }
+
     setIsReconcilingUploads(true);
     setUploadError(null);
     try {
@@ -133,7 +154,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
     }
   };
 
-  const handleStatusChange = (status: 'IDLE' | 'EXECUTING' | 'HEALING' | 'AWAITING_OTP' | 'VERIFIED') => {
+  const handleStatusChange = (status: 'IDLE' | 'EXECUTING' | 'HEALING' | 'AWAITING_OTP' | 'VERIFIED' | 'FAILED') => {
     setPlaywrightStatus(status);
     onPlaywrightStatusChange?.(status);
     if (status === 'AWAITING_OTP' && activeStep === 4) {
@@ -168,19 +189,50 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
     <div id="studio-workspace" className="space-y-6">
       {/* Workflow Controls Bar */}
       <div className="bg-white border border-[#DFDBD2] rounded-xl p-4 flex flex-wrap items-center justify-between gap-4 shadow-xs">
-        <div className="flex items-center space-x-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span className="text-xs font-mono font-semibold text-[#162A45]">Target Government Portal:</span>
-          <select
-            id="workflow-select"
-            value={workflowTarget}
-            onChange={(e) => setWorkflowTarget(e.target.value)}
-            className="bg-[#FAF9F5] border border-[#DFDBD2] text-xs font-mono font-semibold rounded-lg px-3 py-1.5 focus:outline-none focus:border-[#162A45] text-[#111625]"
-          >
-            <option value="e_district_income">UP e-District (eSathi) — Income &amp; Domicile Certificate</option>
-            <option value="national_scholarship">National Scholarship Portal (NSP 2.0 — MeitY)</option>
-            <option value="epfo_joint_decl">EPFO Unified Portal — Joint Declaration SOP</option>
-          </select>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center space-x-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span className="text-xs font-mono font-semibold text-[#162A45]">Target Government Portal:</span>
+            <select
+              id="workflow-select"
+              value={workflowTarget}
+              onChange={(e) => setWorkflowTarget(e.target.value)}
+              className="bg-[#FAF9F5] border border-[#DFDBD2] text-xs font-mono font-semibold rounded-lg px-3 py-1.5 focus:outline-none focus:border-[#162A45] text-[#111625]"
+            >
+              <option value="e_district_income">UP e-District (eSathi) — Income &amp; Domicile Certificate</option>
+              <option value="national_scholarship">National Scholarship Portal (NSP 2.0 — MeitY)</option>
+              <option value="epfo_joint_decl">EPFO Unified Portal — Joint Declaration SOP</option>
+            </select>
+          </div>
+
+          {/* Workspace Mode Switcher */}
+          <div className="flex items-center gap-1 bg-[#FAF9F5] border border-[#DFDBD2] p-1 rounded-lg">
+            <button
+              onClick={() => setWorkspaceMode('guided')}
+              className={`px-3 py-1 rounded text-xs font-mono font-semibold transition-all flex items-center gap-1.5 ${
+                workspaceMode === 'guided'
+                  ? 'bg-[#162A45] text-white shadow-xs'
+                  : 'text-[#525866] hover:text-[#111625]'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>5-Stage Guided Studio</span>
+            </button>
+            <button
+              onClick={() => setWorkspaceMode('digital_twin')}
+              className={`px-3 py-1 rounded text-xs font-mono font-semibold transition-all flex items-center gap-1.5 ${
+                workspaceMode === 'digital_twin'
+                  ? 'bg-[#162A45] text-white shadow-xs'
+                  : 'text-[#525866] hover:text-[#111625]'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span>Application Digital Twin</span>
+              <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-bold ml-0.5">
+                USP
+              </span>
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center space-x-3 text-xs font-mono text-[#525866]">
@@ -192,6 +244,20 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
         </div>
       </div>
 
+      {/* WORKSPACE VIEW 1: APPLICATION DIGITAL TWIN */}
+      {workspaceMode === 'digital_twin' ? (
+        <DigitalTwinWorkspace
+          sessionId={sessionId || 'sess_demo_twin'}
+          workflowTarget={workflowTarget}
+          reconciliation={reconciliation}
+          onNavigateToStep={(step) => {
+            setActiveStep(step);
+            setWorkspaceMode('guided');
+          }}
+        />
+      ) : (
+        /* WORKSPACE VIEW 2: GUIDED 5-STAGE STUDIO */
+        <>
       {/* Guided 5-Step Linear Progression Stepper Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 bg-[#EFECE4] p-1.5 rounded-xl border border-[#DFDBD2] text-xs font-mono">
         {/* Step 1 */}
@@ -533,7 +599,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                       )}
                     </div>
 
-                    {/* 4. Citizen Photo (Optional / Auto-crop from Front) */}
+                    {/* 4. Citizen Photo (Mandatory) */}
                     <div
                       onClick={() => photoInputRef.current?.click()}
                       className={`bg-white border-2 border-dashed rounded-xl p-3.5 cursor-pointer transition-all hover:border-[#162A45] shadow-sm flex flex-col justify-between ${
@@ -544,16 +610,16 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                         type="file"
                         ref={photoInputRef}
                         onChange={(e) => e.target.files?.[0] && handleFileUpload('portrait', e.target.files[0])}
-                        accept="image/*"
+                        accept="image/*,application/pdf,.pdf"
                         className="hidden"
                       />
                       <div>
                         <div className="flex justify-between items-center mb-1.5">
-                          <span className="text-xs font-mono font-bold text-[#162A45]">Citizen Photo</span>
-                          <span className="text-[9px] bg-purple-50 text-purple-800 px-1 py-0.5 rounded font-mono font-bold">Auto-Crop</span>
+                          <span className="text-xs font-mono font-bold text-[#162A45]">Citizen Photo *</span>
+                          <span className="text-[9px] bg-emerald-50 text-emerald-800 px-1 py-0.5 rounded font-mono font-bold">Mandatory</span>
                         </div>
                         <p className="text-[10px] text-[#525866] mb-2 leading-relaxed">
-                          Upload passport photo, or auto-crops directly from Aadhaar Front!
+                          Upload passport photo or portrait scan for 200x230 px portal compliance.
                         </p>
                       </div>
 
@@ -576,13 +642,13 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                       ) : (
                         <div className="py-5 flex flex-col items-center justify-center text-xs font-mono text-gray-500 border border-dashed border-gray-200 rounded-lg bg-gray-50/50">
                           <Upload className="w-5 h-5 text-gray-400 mb-1" />
-                          <span className="font-semibold text-gray-700 text-[11px]">Portrait Photo</span>
-                          <span className="text-[9px] text-gray-400">Auto-crops from Aadhaar</span>
+                          <span className="font-semibold text-gray-700 text-[11px]">Passport Photo</span>
+                          <span className="text-[9px] text-gray-400">JPG, PNG, PDF</span>
                         </div>
                       )}
                     </div>
 
-                    {/* 5. Signature (Optional / Auto-crop from PAN) */}
+                    {/* 5. Signature (Mandatory) */}
                     <div
                       onClick={() => sigInputRef.current?.click()}
                       className={`bg-white border-2 border-dashed rounded-xl p-3.5 cursor-pointer transition-all hover:border-[#162A45] shadow-sm flex flex-col justify-between ${
@@ -593,16 +659,16 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                         type="file"
                         ref={sigInputRef}
                         onChange={(e) => e.target.files?.[0] && handleFileUpload('signature', e.target.files[0])}
-                        accept="image/*"
+                        accept="image/*,application/pdf,.pdf"
                         className="hidden"
                       />
                       <div>
                         <div className="flex justify-between items-center mb-1.5">
-                          <span className="text-xs font-mono font-bold text-[#162A45]">Signature</span>
-                          <span className="text-[9px] bg-purple-50 text-purple-800 px-1 py-0.5 rounded font-mono font-bold">Auto-Crop</span>
+                          <span className="text-xs font-mono font-bold text-[#162A45]">Signature *</span>
+                          <span className="text-[9px] bg-emerald-50 text-emerald-800 px-1 py-0.5 rounded font-mono font-bold">Mandatory</span>
                         </div>
                         <p className="text-[10px] text-[#525866] mb-2 leading-relaxed">
-                          Upload signature scan, or auto-crops directly from PAN Card!
+                          Upload applicant signature scan on white background for &lt;= 19.5KB portal compliance.
                         </p>
                       </div>
 
@@ -626,7 +692,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                         <div className="py-5 flex flex-col items-center justify-center text-xs font-mono text-gray-500 border border-dashed border-gray-200 rounded-lg bg-gray-50/50">
                           <Upload className="w-5 h-5 text-gray-400 mb-1" />
                           <span className="font-semibold text-gray-700 text-[11px]">Signature Scan</span>
-                          <span className="text-[9px] text-gray-400">Auto-crops from PAN</span>
+                          <span className="text-[9px] text-gray-400">JPG, PNG, PDF</span>
                         </div>
                       )}
                     </div>
@@ -769,6 +835,33 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                   </span>
                   <h3 className="font-serif text-2xl text-[#111625]">The 4-Gate Virtual Lekhpal Audit &amp; Phonetic Matrix</h3>
                 </div>
+              </div>
+
+              {/* Digital Twin Launch Callout Banner */}
+              <div className="bg-[#FAF9F5] border border-[#DFDBD2] p-4 rounded-xl flex flex-wrap items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-[#FAF0E6] text-[#A84A1A]">
+                    <Sparkles className="w-5 h-5 text-[#A84A1A]" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-mono font-bold text-[#162A45] flex items-center gap-1.5">
+                      Explore in Application Digital Twin
+                      <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-bold">
+                        USP
+                      </span>
+                    </span>
+                    <p className="text-xs text-[#525866]">
+                      View the interactive Evidence Graph, test counterfactual corrections in the What-If Sandbox, or run Playwright crash tests.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setWorkspaceMode('digital_twin')}
+                  className="px-4 py-2 bg-[#162A45] hover:bg-[#203a5e] text-white rounded-lg text-xs font-mono font-bold transition-colors flex items-center gap-1.5 shadow-xs"
+                >
+                  <span>Launch Digital Twin</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
               </div>
 
               <PhoneticGraphMatrix
@@ -1006,6 +1099,8 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
           </ErrorBoundary>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 };

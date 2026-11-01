@@ -216,3 +216,172 @@ export interface GenerateDeclarationPdfRequest {
   language?: string;
   place?: string;
 }
+
+// ==============================================================================
+// APPLICATION DIGITAL TWIN TYPES
+// ==============================================================================
+
+export type DigitalTwinNodeCategory =
+  | 'document'
+  | 'field'
+  | 'entity'
+  | 'requirement'
+  | 'portal_field'
+  | 'validation'
+  | 'remediation';
+
+export type DigitalTwinNodeStatus =
+  | 'VERIFIED'
+  | 'WARNING'
+  | 'CONFLICT'
+  | 'PENDING'
+  | 'SATISFIED'
+  | 'UNSATISFIED';
+
+export interface DigitalTwinGraphNode {
+  id: string;
+  label: string;
+  category: DigitalTwinNodeCategory;
+  status: DigitalTwinNodeStatus;
+  value?: string | null;
+  confidence?: number | null;
+  source_doc?: string | null;
+  provenance: Record<string, any>;
+}
+
+export interface DigitalTwinGraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  relation: string;
+  status: 'ACTIVE' | 'PROPOSED' | 'CONFLICT';
+  details?: string | null;
+}
+
+export interface DigitalTwinGraphResponse {
+  session_id: string;
+  nodes: DigitalTwinGraphNode[];
+  edges: DigitalTwinGraphEdge[];
+  summary: {
+    total_nodes: number;
+    total_edges: number;
+    verified_nodes: number;
+    conflict_nodes: number;
+    risk_score?: number;
+    workflow_target?: string;
+    status?: string;
+  };
+}
+
+export interface DigitalTwinOverviewResponse {
+  session_id: string;
+  workflow_target: string;
+  applicant_identity: {
+    canonical_name: string;
+    secondary_name: string;
+    confidence_score: number;
+    is_consistent: boolean;
+  };
+  guardian_identity: {
+    father_or_guardian: string;
+    confidence_score: number;
+    is_consistent: boolean;
+  };
+  residence_identity: {
+    pincode: string;
+    district: string;
+    lgd_status: string;
+    address: string;
+  };
+  composite_risk_score: number;
+  filing_readiness_status: 'READY_FOR_FILING' | 'CURABLE_ACTION_REQUIRED' | 'FATAL_MISMATCH';
+  statutory_compliance_rate: number;
+  documents_summary: Array<{
+    doc_type: string;
+    filename: string;
+    sha256: string;
+    ocr_confidence: number;
+    fields_extracted: number;
+  }>;
+  portal_schema_requirements: Array<{
+    field_name: string;
+    label: string;
+    required: boolean;
+    satisfied: boolean;
+    source_value?: string;
+    rule_citation?: string;
+  }>;
+  actionable_remediations: Array<{
+    action_type: string;
+    title: string;
+    description: string;
+    target_stage: number;
+  }>;
+}
+
+export interface WhatIfSimulateRequest {
+  field_overrides: Record<string, string>;
+  selected_remediations?: string[];
+}
+
+export interface WhatIfSimulateResponse {
+  session_id: string;
+  before_state: {
+    name_a: string;
+    name_b: string;
+    father_name: string;
+    pincode: string;
+    risk_score: number;
+    status: string;
+    name_similarity: number;
+    postal_verified: boolean;
+    gate_1: string;
+    gate_4: string;
+  };
+  after_state: {
+    name_a: string;
+    name_b: string;
+    father_name: string;
+    pincode: string;
+    risk_score: number;
+    status: string;
+    name_similarity: number;
+    postal_verified: boolean;
+    gate_1: string;
+    gate_4: string;
+  };
+  risk_delta: number;
+  impact_summary: string[];
+  affected_nodes: string[];
+  resolved_discrepancies: string[];
+  unresolved_discrepancies: string[];
+}
+
+export interface CrashTestRehearsalRequest {
+  workflow_target?: string;
+  simulate_chaos?: boolean;
+}
+
+export interface CrashTestRehearsalResponse {
+  session_id: string;
+  workflow_target: string;
+  passed_preflight_checks: boolean;
+  checklist: Array<{
+    id: string;
+    label: string;
+    passed: boolean;
+    details: string;
+  }>;
+  portal_steps: Array<{
+    step_index: number;
+    step_name: string;
+    target_url: string;
+    status: string;
+    latency_ms: number;
+    message: string;
+  }>;
+  overall_verdict: 'REHEARSAL_PASSED' | 'REHEARSAL_WARNING' | 'REHEARSAL_FAILED';
+  execution_time_ms: number;
+  recommendations: string[];
+}
+

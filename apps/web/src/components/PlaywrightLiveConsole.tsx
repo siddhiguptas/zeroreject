@@ -10,7 +10,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 interface PlaywrightLiveConsoleProps {
   sessionId: string;
   workflowTarget?: string;
-  onExecutionStateChange?: (status: 'IDLE' | 'EXECUTING' | 'HEALING' | 'AWAITING_OTP' | 'VERIFIED') => void;
+  onExecutionStateChange?: (status: 'IDLE' | 'EXECUTING' | 'HEALING' | 'AWAITING_OTP' | 'VERIFIED' | 'FAILED') => void;
   onOtpDetected?: (otp: string) => void;
 }
 
@@ -24,7 +24,7 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
   const [isRunning, setIsRunning] = useState(false);
   const [events, setEvents] = useState<ExecutionStepEvent[]>([]);
   const [currentScreenshot, setCurrentScreenshot] = useState<string | null>(null);
-  const [status, setStatus] = useState<'IDLE' | 'EXECUTING' | 'HEALING' | 'AWAITING_OTP' | 'VERIFIED'>('IDLE');
+  const [status, setStatus] = useState<'IDLE' | 'EXECUTING' | 'HEALING' | 'AWAITING_OTP' | 'VERIFIED' | 'FAILED'>('IDLE');
   const [otpCode, setOtpCode] = useState('');
   const [detectedOtp, setDetectedOtp] = useState('');
   const [receiptAck, setReceiptAck] = useState<string | null>(null);
@@ -80,6 +80,10 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
         } else if (event.status === 'SUBMITTED') {
           setStatus('VERIFIED');
           onExecutionStateChange?.('VERIFIED');
+          setIsRunning(false);
+        } else if (event.status === 'FAILED') {
+          setStatus('FAILED');
+          onExecutionStateChange?.('FAILED');
           setIsRunning(false);
         }
       },

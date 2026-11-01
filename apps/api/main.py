@@ -1,4 +1,10 @@
+import asyncio
+import sys
 from contextlib import asynccontextmanager
+
+if sys.platform == "win32":
+    # On Windows, ProactorEventLoop is required for asyncio subprocesses (Playwright browser automation)
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.core.config import settings
 from apps.api.core.database import get_db, init_db
-from apps.api.routers import compiler, execution, ingestion, judge_audit, jurisdiction, voice
+from apps.api.routers import compiler, digital_twin, execution, ingestion, judge_audit, jurisdiction, voice
 
 
 @asynccontextmanager
@@ -34,6 +40,7 @@ app.add_middleware(
 # Mount API Routers
 app.include_router(ingestion.router)
 app.include_router(compiler.router)
+app.include_router(digital_twin.router)
 app.include_router(execution.router)
 app.include_router(judge_audit.router)
 app.include_router(jurisdiction.router)

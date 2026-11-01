@@ -210,7 +210,7 @@ export function createExecutionEventSource(
         const data: ExecutionStepEvent = JSON.parse(e.data);
         onEvent(data);
         retryCount = 0; // reset retry counter on healthy message
-        if (data.status === 'AWAITING_OTP' || data.status === 'SUBMITTED' || data.status === 'FAILED') {
+        if (data.status === 'SUBMITTED' || data.status === 'FAILED') {
           isClosedManually = true;
           eventSource?.close();
         }
@@ -271,4 +271,76 @@ export async function verifyJurisdiction(pin: string): Promise<JurisdictionVerif
   }
   return res.json();
 }
+
+// ==============================================================================
+// APPLICATION DIGITAL TWIN API CLIENT
+// ==============================================================================
+
+import type {
+  DigitalTwinOverviewResponse,
+  DigitalTwinGraphResponse,
+  WhatIfSimulateRequest,
+  WhatIfSimulateResponse,
+  CrashTestRehearsalRequest,
+  CrashTestRehearsalResponse,
+} from '@/types';
+
+export async function fetchDigitalTwinOverview(
+  sessionId: string
+): Promise<DigitalTwinOverviewResponse> {
+  const res = await fetch(`${API_BASE}/api/digital-twin/${sessionId}/overview`, {
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail || `Failed to fetch Digital Twin overview (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function fetchDigitalTwinGraph(
+  sessionId: string
+): Promise<DigitalTwinGraphResponse> {
+  const res = await fetch(`${API_BASE}/api/digital-twin/${sessionId}/graph`, {
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail || `Failed to fetch Evidence Graph (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function simulateWhatIf(
+  sessionId: string,
+  request: WhatIfSimulateRequest
+): Promise<WhatIfSimulateResponse> {
+  const res = await fetch(`${API_BASE}/api/digital-twin/${sessionId}/simulate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail || `What-If simulation failed (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function runCrashTestRehearsal(
+  sessionId: string,
+  request: CrashTestRehearsalRequest
+): Promise<CrashTestRehearsalResponse> {
+  const res = await fetch(`${API_BASE}/api/digital-twin/${sessionId}/crash-test`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail || `Crash test rehearsal failed (${res.status})`);
+  }
+  return res.json();
+}
+
 

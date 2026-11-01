@@ -207,3 +207,74 @@ class GenerateDeclarationPdfRequest(BaseModel):
     place: str | None = None
 
 
+# ==============================================================================
+# DIGITAL TWIN SCHEMAS
+# ==============================================================================
+
+class DigitalTwinGraphNode(BaseModel):
+    id: str
+    label: str
+    category: str # "document" | "field" | "entity" | "requirement" | "portal_field" | "validation" | "remediation"
+    status: str # "VERIFIED" | "WARNING" | "CONFLICT" | "PENDING" | "SATISFIED" | "UNSATISFIED"
+    value: str | None = None
+    confidence: float | None = None
+    source_doc: str | None = None
+    provenance: dict[str, Any] = Field(default_factory=dict)
+
+class DigitalTwinGraphEdge(BaseModel):
+    id: str
+    source: str
+    target: str
+    relation: str # "CONTAINS_FIELD" | "NORMALIZED_TO" | "CONFLICTS_WITH" | "SATISFIES_REQUIREMENT" | "MAPS_TO_PORTAL_FIELD" | "REMEDIATION_RESOLVES_CHECK"
+    status: str = "ACTIVE" # "ACTIVE" | "PROPOSED" | "CONFLICT"
+    details: str | None = None
+
+class DigitalTwinGraphResponse(BaseModel):
+    session_id: str
+    nodes: list[DigitalTwinGraphNode]
+    edges: list[DigitalTwinGraphEdge]
+    summary: dict[str, Any]
+
+class DigitalTwinOverviewResponse(BaseModel):
+    session_id: str
+    workflow_target: str
+    applicant_identity: dict[str, Any]
+    guardian_identity: dict[str, Any]
+    residence_identity: dict[str, Any]
+    composite_risk_score: float
+    filing_readiness_status: str # "READY_FOR_FILING" | "CURABLE_ACTION_REQUIRED" | "FATAL_MISMATCH"
+    statutory_compliance_rate: float
+    documents_summary: list[dict[str, Any]]
+    portal_schema_requirements: list[dict[str, Any]]
+    actionable_remediations: list[dict[str, Any]]
+
+class WhatIfSimulateRequest(BaseModel):
+    field_overrides: dict[str, str] = Field(default_factory=dict)
+    selected_remediations: list[str] = Field(default_factory=list)
+
+class WhatIfSimulateResponse(BaseModel):
+    session_id: str
+    before_state: dict[str, Any]
+    after_state: dict[str, Any]
+    risk_delta: float
+    impact_summary: list[str]
+    affected_nodes: list[str]
+    resolved_discrepancies: list[str]
+    unresolved_discrepancies: list[str]
+
+class CrashTestRehearsalRequest(BaseModel):
+    workflow_target: str = "e_district_income"
+    simulate_chaos: bool = False
+
+class CrashTestRehearsalResponse(BaseModel):
+    session_id: str
+    workflow_target: str
+    passed_preflight_checks: bool
+    checklist: list[dict[str, Any]]
+    portal_steps: list[dict[str, Any]]
+    overall_verdict: str # "REHEARSAL_PASSED" | "REHEARSAL_WARNING" | "REHEARSAL_FAILED"
+    execution_time_ms: float
+    recommendations: list[str]
+
+
+
