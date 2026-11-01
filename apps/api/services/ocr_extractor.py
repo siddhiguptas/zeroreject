@@ -142,10 +142,14 @@ class FreeMultimodalOCRExtractor:
         for rot_code, angle in rotations:
             cand = img if rot_code is None else cv2.rotate(img, rot_code)
             ch, cw = cand.shape[:2]
-            scale = 800.0 / max(ch, cw)
-            thumb = cv2.resize(cand, (int(cw * scale), int(ch * scale)))
+            scale = 500.0 / max(ch, cw)
+            thumb = cv2.resize(cand, (int(cw * scale), int(ch * scale)), interpolation=cv2.INTER_AREA)
             gray = cv2.cvtColor(thumb, cv2.COLOR_BGR2GRAY)
-            txt = pytesseract.image_to_string(gray, config='--oem 3 --psm 3')
+            txt = ""
+            try:
+                txt = pytesseract.image_to_string(gray, config='--oem 3 --psm 3')
+            except Exception:
+                pass
             up = txt.upper()
             sc = sum(10 for kw in CIVIC_ANCHORS if kw in up)
             if re.search(r'\b[1-9][0-9]{5}\b', txt): sc += 20
@@ -155,7 +159,7 @@ class FreeMultimodalOCRExtractor:
             if sc > best_score:
                 best_score = sc
                 best_img = cand
-                if sc >= 40:
+                if sc >= 20:
                     break
 
         return best_img
@@ -229,9 +233,13 @@ class FreeMultimodalOCRExtractor:
         orig_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
         h, w = img.shape[:2]
-        # Upscale if image is low-res for better OCR character recognition
-        if max(h, w) < 1600:
-            scale = 1600.0 / max(h, w)
+        # Cap dimensions to max 1800px to ensure fast, memory-safe OCR without OOM on cloud VMs
+        if max(h, w) > 1800:
+            scale = 1800.0 / max(h, w)
+            img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+            h, w = img.shape[:2]
+        elif max(h, w) < 1200:
+            scale = 1200.0 / max(h, w)
             img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_CUBIC)
             h, w = img.shape[:2]
 
@@ -274,56 +282,51 @@ class FreeMultimodalOCRExtractor:
 
     def _run_local_ocr(self, orig_gray: np.ndarray, gray_img: np.ndarray, enhanced_img: np.ndarray) -> tuple[str, str]:
         """
-        Stage 2: Run Free Local CPU OCR via Pytesseract with multi-PSM extraction
-        (PSM 6 on pure grayscale for clean text lines, PSM 11 on enhanced for sparse tokens,
-        and left-column text extraction to separate text from QR matrices).
+        Stage 2: Run Free Local CPU OCR via Pytesseract with targeted high-speed extraction.
+        Primary: PSM 6 line-flow + Left 70% column crop (isolates identity/address text from 2D QR).
+        Fallback: Sparse token pass if initial extraction is short.
         """
         custom_flow = r'--oem 3 --psm 6'
         custom_sparse = r'--oem 3 --psm 11'
         custom_auto = r'--oem 3 --psm 3'
 
-        txt_auto = ""
         txt_gray_flow = ""
-        txt_sparse = ""
         txt_left_flow = ""
-        txt_orig_left = ""
 
-        try:
-            txt_auto = pytesseract.image_to_string(gray_img, config=custom_auto)
-        except Exception:
-            pass
-
+        # Pass 1: Standard layout line flow (PSM 6)
         try:
             txt_gray_flow = pytesseract.image_to_string(gray_img, config=custom_flow)
         except Exception:
             pass
 
-        try:
-            txt_sparse = pytesseract.image_to_string(enhanced_img, config=custom_sparse)
-        except Exception:
-            pass
-
-        # Text column crop on upscaled (left 65% isolates name/number text from 2D QR codes on PAN and Aadhaar back)
+        # Pass 2: Left column crop (specifically isolates name, father, address from right-side dense QR)
         try:
             h, w = gray_img.shape[:2]
-            left_crop = gray_img[:, :int(w * 0.65)]
+            left_crop = gray_img[:, :int(w * 0.70)]
             txt_left_flow = pytesseract.image_to_string(left_crop, config=custom_flow)
         except Exception:
             pass
 
-        # Text column crop on native original (preserves thin vector characters on PAN cards)
-        try:
-            ho, wo = orig_gray.shape[:2]
-            orig_crop = orig_gray[:, :int(wo * 0.65)]
-            txt_orig_left = pytesseract.image_to_string(orig_crop, config=custom_flow)
-        except Exception:
-            pass
+        combined_text = f"{txt_gray_flow}\n{txt_left_flow}".strip()
+        engine = "Pytesseract_Fast_DualZone"
 
-        combined_text = f"{txt_auto}\n{txt_gray_flow}\n{txt_orig_left}\n{txt_left_flow}\n{txt_sparse}"
-        engine = "Pytesseract_MultiZone_Ensemble"
+        # Pass 3: Only if initial passes returned insufficient characters (< 35), run sparse fallback
+        if len(combined_text) < 35:
+            txt_sparse = ""
+            try:
+                txt_sparse = pytesseract.image_to_string(enhanced_img, config=custom_sparse)
+                combined_text = f"{combined_text}\n{txt_sparse}".strip()
+            except Exception:
+                pass
+            try:
+                txt_auto = pytesseract.image_to_string(gray_img, config=custom_auto)
+                combined_text = f"{combined_text}\n{txt_auto}".strip()
+            except Exception:
+                pass
+            engine = "Pytesseract_MultiZone_Ensemble"
 
-        # Multi-Angle Orientation Retry if scan was upside down or sideways
-        if len(combined_text.strip()) < 20:
+        # Multi-Angle Orientation Retry only if scan has almost zero text (< 15 chars)
+        if len(combined_text.strip()) < 15:
             for rot_code, angle_deg in [
                 (cv2.ROTATE_90_CLOCKWISE, "90deg"),
                 (cv2.ROTATE_180, "180deg"),
@@ -332,12 +335,10 @@ class FreeMultimodalOCRExtractor:
                 rot_img = cv2.rotate(gray_img, rot_code)
                 try:
                     cand_flow = pytesseract.image_to_string(rot_img, config=custom_flow)
-                    cand_sparse = pytesseract.image_to_string(rot_img, config=custom_sparse)
-                    cand_combined = f"{cand_flow}\n{cand_sparse}"
-                    if len(cand_combined.strip()) > len(combined_text.strip()):
-                        combined_text = cand_combined
+                    if len(cand_flow.strip()) > len(combined_text.strip()):
+                        combined_text = cand_flow
                         engine = f"Pytesseract_MultiAngle_Retry_{angle_deg}"
-                        if len(combined_text.strip()) >= 30:
+                        if len(combined_text.strip()) >= 25:
                             break
                 except Exception:
                     continue
