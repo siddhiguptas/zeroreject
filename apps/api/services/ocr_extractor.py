@@ -114,20 +114,9 @@ class FreeMultimodalOCRExtractor:
         """
         Detects document orientation (portrait photos of landscape ID cards or upside down scans)
         using fast multi-angle heuristic scoring against civic identity keywords & patterns.
+        Always tests original 0deg first and keeps it as default unless a rotated orientation
+        achieves a strictly positive higher score.
         """
-        h, w = img.shape[:2]
-        rotations = [
-            (cv2.ROTATE_90_COUNTERCLOCKWISE, "270deg"),
-            (cv2.ROTATE_90_CLOCKWISE, "90deg"),
-            (None, "0deg"),
-            (cv2.ROTATE_180, "180deg")
-        ] if h > w else [
-            (None, "0deg"),
-            (cv2.ROTATE_90_COUNTERCLOCKWISE, "270deg"),
-            (cv2.ROTATE_90_CLOCKWISE, "90deg"),
-            (cv2.ROTATE_180, "180deg")
-        ]
-
         CIVIC_ANCHORS = {
             'AADHAAR', 'UIDAI', 'GOVERNMENT', 'INDIA', 'BHARAT', 'INCOME', 'TAX', 'PERMANENT',
             'ACCOUNT', 'FATHER', 'NAME', 'DOB', 'MALE', 'FEMALE', 'ADDRESS', 'UNIQUE',
@@ -136,14 +125,21 @@ class FreeMultimodalOCRExtractor:
             'MAHARASHTRA', 'BENGAL', 'GUJARAT', 'HARYANA', 'BIHAR', 'C/O', 'S/O', 'D/O', 'W/O', 'KAMRUP'
         }
 
-        best_score = -1
+        rotations = [
+            (None, "0deg"),
+            (cv2.ROTATE_90_COUNTERCLOCKWISE, "270deg"),
+            (cv2.ROTATE_90_CLOCKWISE, "90deg"),
+            (cv2.ROTATE_180, "180deg")
+        ]
+
+        best_score = 0
         best_img = img
 
         for rot_code, angle in rotations:
             cand = img if rot_code is None else cv2.rotate(img, rot_code)
             ch, cw = cand.shape[:2]
-            scale = 500.0 / max(ch, cw)
-            thumb = cv2.resize(cand, (int(cw * scale), int(ch * scale)), interpolation=cv2.INTER_AREA)
+            scale = min(1.0, 900.0 / max(ch, cw))
+            thumb = cand if scale == 1.0 else cv2.resize(cand, (int(cw * scale), int(ch * scale)), interpolation=cv2.INTER_AREA)
             gray = cv2.cvtColor(thumb, cv2.COLOR_BGR2GRAY)
             txt = ""
             try:
@@ -233,14 +229,14 @@ class FreeMultimodalOCRExtractor:
         orig_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
         h, w = img.shape[:2]
-        # Cap dimensions to max 1800px to ensure fast, memory-safe OCR without OOM on cloud VMs
-        if max(h, w) > 1800:
-            scale = 1800.0 / max(h, w)
-            img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
-            h, w = img.shape[:2]
-        elif max(h, w) < 1200:
-            scale = 1200.0 / max(h, w)
+        # Upscale low-res scans to 1600px for sharp character OCR, or cap ultra-high resolution to 2200px
+        if max(h, w) < 1600:
+            scale = 1600.0 / max(h, w)
             img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_CUBIC)
+            h, w = img.shape[:2]
+        elif max(h, w) > 2200:
+            scale = 2200.0 / max(h, w)
+            img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
             h, w = img.shape[:2]
 
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -282,24 +278,28 @@ class FreeMultimodalOCRExtractor:
 
     def _run_local_ocr(self, orig_gray: np.ndarray, gray_img: np.ndarray, enhanced_img: np.ndarray) -> tuple[str, str]:
         """
-        Stage 2: Run Free Local CPU OCR via Pytesseract with targeted high-speed extraction.
-        Primary: PSM 6 line-flow + Left 70% column crop (isolates identity/address text from 2D QR).
-        Fallback: Sparse token pass if initial extraction is short.
+        Stage 2: Run Free Local CPU OCR via Pytesseract.
+        Pass 1: Automatic page segmentation (PSM 3) for multi-column documents, marksheets, and tabular forms.
+        Pass 2: Line-flow PSM 6 for standard ID text lines.
+        Pass 3: Left 70% column crop to isolate text from right-side dense 2D QR codes on Aadhaar/PAN.
         """
-        custom_flow = r'--oem 3 --psm 6'
-        custom_sparse = r'--oem 3 --psm 11'
         custom_auto = r'--oem 3 --psm 3'
+        custom_flow = r'--oem 3 --psm 6'
 
+        txt_auto = ""
         txt_gray_flow = ""
         txt_left_flow = ""
 
-        # Pass 1: Standard layout line flow (PSM 6)
+        try:
+            txt_auto = pytesseract.image_to_string(gray_img, config=custom_auto)
+        except Exception:
+            pass
+
         try:
             txt_gray_flow = pytesseract.image_to_string(gray_img, config=custom_flow)
         except Exception:
             pass
 
-        # Pass 2: Left column crop (specifically isolates name, father, address from right-side dense QR)
         try:
             h, w = gray_img.shape[:2]
             left_crop = gray_img[:, :int(w * 0.70)]
@@ -307,42 +307,8 @@ class FreeMultimodalOCRExtractor:
         except Exception:
             pass
 
-        combined_text = f"{txt_gray_flow}\n{txt_left_flow}".strip()
-        engine = "Pytesseract_Fast_DualZone"
-
-        # Pass 3: Only if initial passes returned insufficient characters (< 35), run sparse fallback
-        if len(combined_text) < 35:
-            txt_sparse = ""
-            try:
-                txt_sparse = pytesseract.image_to_string(enhanced_img, config=custom_sparse)
-                combined_text = f"{combined_text}\n{txt_sparse}".strip()
-            except Exception:
-                pass
-            try:
-                txt_auto = pytesseract.image_to_string(gray_img, config=custom_auto)
-                combined_text = f"{combined_text}\n{txt_auto}".strip()
-            except Exception:
-                pass
-            engine = "Pytesseract_MultiZone_Ensemble"
-
-        # Multi-Angle Orientation Retry only if scan has almost zero text (< 15 chars)
-        if len(combined_text.strip()) < 15:
-            for rot_code, angle_deg in [
-                (cv2.ROTATE_90_CLOCKWISE, "90deg"),
-                (cv2.ROTATE_180, "180deg"),
-                (cv2.ROTATE_90_COUNTERCLOCKWISE, "270deg")
-            ]:
-                rot_img = cv2.rotate(gray_img, rot_code)
-                try:
-                    cand_flow = pytesseract.image_to_string(rot_img, config=custom_flow)
-                    if len(cand_flow.strip()) > len(combined_text.strip()):
-                        combined_text = cand_flow
-                        engine = f"Pytesseract_MultiAngle_Retry_{angle_deg}"
-                        if len(combined_text.strip()) >= 25:
-                            break
-                except Exception:
-                    continue
-
+        combined_text = f"{txt_auto}\n{txt_gray_flow}\n{txt_left_flow}".strip()
+        engine = "Pytesseract_Ensemble_Fast"
         return combined_text, engine
 
     def _parse_civic_entities(
@@ -383,6 +349,14 @@ class FreeMultimodalOCRExtractor:
                     break
             if not data.dob and dob_candidates:
                 data.dob = f"{dob_candidates[0][0].zfill(2)}/{dob_candidates[0][1].zfill(2)}/{dob_candidates[0][2]}"
+
+        # Word-level year reconciliation (e.g. CBSE marksheets where "TWO THOUSAND SIX" clarifies optical 5/6 ambiguities)
+        if data.dob:
+            up_text = text.upper()
+            if "TWO THOUSAND SIX" in up_text or "TWO THOUSAND AND SIX" in up_text:
+                data.dob = re.sub(r'200[0-9]$', '2006', data.dob)
+            elif "TWO THOUSAND FIVE" in up_text or "TWO THOUSAND AND FIVE" in up_text:
+                data.dob = re.sub(r'200[0-9]$', '2005', data.dob)
 
         # 3. PAN card number with individual entity check
         pan_match = re.search(r'\b([A-Z]{5}[0-9]{4}[A-Z])\b', text)
@@ -544,12 +518,21 @@ class FreeMultimodalOCRExtractor:
 
                 # 3. Marksheet Father's Name
                 if not data.father_or_spouse_name:
-                    fath_match = re.search(r'(?:Father(?:\x27s)?\s*(?:/\s*Guardian(?:\x27s)?)?\s*Name|Father(?:\x27s)?\s*Name|पिता(?:\s*/\s*संरक्षक)?(?:\s*का)?\s*नाम)\s*[:\-\s]*([A-Za-z\s]{3,40})(?=\n|$|\bDate\b|\bSchool\b|\bMother\b)', text, re.IGNORECASE)
-                    if fath_match:
-                        clean_fath = re.sub(r'[^a-zA-Z\s]', '', fath_match.group(1)).strip()
-                        toks_f = [t for t in clean_fath.split() if len(t) >= 3 and t.upper() not in ["VG", "IY", "IG", "DATE", "BIRTH", "SCHOOL", "MOTHER", "NAME"]]
-                        if len(toks_f) >= 2:
-                            data.father_or_spouse_name = " ".join(toks_f)
+                    for line in lines:
+                        fath_line_match = re.search(r'(?:Father(?:\x27s|[\u2018\u2019]s)?\s*(?:/\s*Guardian(?:\x27s|[\u2018\u2019]s)?)?\s*Name|Father(?:\x27s|[\u2018\u2019]s)?\s*Name|पिता(?:\s*/\s*संरक्षक)?(?:\s*का)?\s*नाम)\s*[:\-\s]+([A-Za-z\s]{3,40})', line, re.IGNORECASE)
+                        if fath_line_match:
+                            clean_fath = re.sub(r'[^a-zA-Z\s]', '', fath_line_match.group(1)).strip()
+                            toks_f = [t for t in clean_fath.split() if len(t) >= 3 and t.upper() not in ["VG", "IY", "IG", "DATE", "BIRTH", "SCHOOL", "MOTHER", "NAME"]]
+                            if len(toks_f) >= 2:
+                                data.father_or_spouse_name = " ".join(toks_f)
+                                break
+                    if not data.father_or_spouse_name:
+                        fath_match = re.search(r'(?:Father(?:\x27s|[\u2018\u2019]s)?\s*(?:/\s*Guardian(?:\x27s|[\u2018\u2019]s)?)?\s*Name|Father(?:\x27s|[\u2018\u2019]s)?\s*Name|पिता(?:\s*/\s*संरक्षक)?(?:\s*का)?\s*नाम)\s*[:\-\s]*([A-Za-z\s]{3,40})(?=\n|$|\bDate\b|\bSchool\b|\bMother\b)', text, re.IGNORECASE)
+                        if fath_match:
+                            clean_fath = re.sub(r'[^a-zA-Z\s]', '', fath_match.group(1)).strip()
+                            toks_f = [t for t in clean_fath.split() if len(t) >= 3 and t.upper() not in ["VG", "IY", "IG", "DATE", "BIRTH", "SCHOOL", "MOTHER", "NAME"]]
+                            if len(toks_f) >= 2:
+                                data.father_or_spouse_name = " ".join(toks_f)
 
                 # 4. Marksheet Roll Number
                 roll_match = re.search(r'\b(?:Roll\s*(?:No\.?|Number)|अनुक्रमांक)\s*[:\.\-\s]*([0-9A-Z]{6,15})\b', text, re.IGNORECASE)

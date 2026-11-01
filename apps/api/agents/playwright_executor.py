@@ -309,7 +309,7 @@ class PlaywrightBureaucracyAgent:
                     "step_index": 4,
                     "step_name": "OTP_REQUIRED",
                     "display_name": "OTP Required",
-                    "status": "AWAITING_OTP",
+                    "status": "RUNNING",
                     "message": "OTP Required: Target government portal challenged for citizen verification.",
                     "screenshot_base64": shot4_otp,
                     "otp_code": otp_val,
@@ -322,6 +322,7 @@ class PlaywrightBureaucracyAgent:
                     "display_name": "Awaiting User Authorization",
                     "status": "AWAITING_OTP",
                     "message": "Awaiting User Authorization: Citizen must input 6-digit verification code to authorize final submission...",
+                    "screenshot_base64": shot4_otp,
                     "otp_code": otp_val,
                     "error_recovery_count": retry_count,
                     "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
