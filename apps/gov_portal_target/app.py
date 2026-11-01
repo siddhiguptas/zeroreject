@@ -597,15 +597,19 @@ async def finalize_submission(
     }
 
     body = f"""
-    <div id="receipt-container" class="text-center py-8">
-        <div class="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+    <div id="receipt-container" class="text-center py-6">
+        <div class="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
             <svg class="w-10 h-10 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
             </svg>
         </div>
         
-        <h2 class="text-2xl font-bold text-gray-900 mb-2">Application Filed Successfully</h2>
-        <p class="text-sm text-gray-600 mb-6">Government Reference & Digital Stamped Receipt</p>
+        <div class="inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-900 border border-emerald-400 px-4 py-1 rounded-full font-mono text-xs font-bold mb-3 uppercase tracking-wider shadow-xs">
+            <span>✓</span> OFFICIAL STAMPED RECEIPT GENERATED
+        </div>
+
+        <h2 class="text-2xl font-bold text-gray-900 mb-1">Application Filed Successfully</h2>
+        <p class="text-sm text-gray-600 mb-5">Government Reference & Digital Stamped Receipt</p>
 
         <div class="bg-gray-50 border border-gray-200 rounded p-6 max-w-lg mx-auto text-left mb-6 font-mono text-xs space-y-2">
             <div class="flex justify-between border-b pb-2">

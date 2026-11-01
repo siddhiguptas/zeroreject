@@ -273,7 +273,9 @@ async def authorize_otp(
         acknowledgement_number=ack,
         submission_timestamp=time.strftime("%d-%m-%Y %H:%M:%S UTC", time.gmtime()),
         receipt_pdf_url=f"/api/execution/receipt/{req.session_id}",
-        filing_status="CONFIRMED_AND_STAMPED"
+        filing_status="CONFIRMED_AND_STAMPED",
+        screenshot_base64=result.get("screenshot_base64"),
+        otp_entered_screenshot_base64=result.get("otp_entered_screenshot_base64")
     )
 
 

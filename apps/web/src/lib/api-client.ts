@@ -7,7 +7,8 @@ import {
   BenchmarkSimulationResponse,
   DeclarationDraftResponse,
   GenerateDeclarationPdfRequest,
-  CompiledAssetDetail
+  CompiledAssetDetail,
+  FinalSubmissionReceipt
 } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -82,13 +83,20 @@ export async function compileAssets(
 export async function authorizeOtp(
   sessionId: string,
   otpCode: string
-): Promise<{ acknowledgement_number: string; filing_status: string }> {
+): Promise<FinalSubmissionReceipt> {
   const res = await fetch(`${API_BASE}/api/execution/authorize-otp`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ session_id: sessionId, otp_code: otpCode, citizen_consent: true }),
   });
-  if (!res.ok) throw new Error(`OTP authorization failed: ${res.statusText}`);
+  if (!res.ok) {
+    let errMsg = `OTP authorization failed: ${res.statusText}`;
+    try {
+      const errJson = await res.json();
+      if (errJson?.detail) errMsg = errJson.detail;
+    } catch (_) {}
+    throw new Error(errMsg);
+  }
   return res.json();
 }
 

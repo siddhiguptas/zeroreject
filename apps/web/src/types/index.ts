@@ -143,6 +143,16 @@ export interface CompileAssetsResponse {
   execution_ready: boolean;
 }
 
+export interface FinalSubmissionReceipt {
+  session_id: string;
+  acknowledgement_number: string;
+  submission_timestamp: string;
+  receipt_pdf_url: string;
+  filing_status: string;
+  screenshot_base64?: string;
+  otp_entered_screenshot_base64?: string;
+}
+
 export interface ExecutionStepEvent {
   step_index: number;
   step_name: string;

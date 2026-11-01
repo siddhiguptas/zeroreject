@@ -138,6 +138,8 @@ class FinalSubmissionReceipt(BaseModel):
     submission_timestamp: str
     receipt_pdf_url: str
     filing_status: str
+    screenshot_base64: str | None = None
+    otp_entered_screenshot_base64: str | None = None
 
 # Judge Audit & Telemetry Schemas
 class JudgeTelemetryResponse(BaseModel):

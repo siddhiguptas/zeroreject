@@ -12,6 +12,7 @@ interface PlaywrightLiveConsoleProps {
   workflowTarget?: string;
   onExecutionStateChange?: (status: 'IDLE' | 'EXECUTING' | 'HEALING' | 'AWAITING_OTP' | 'VERIFIED' | 'FAILED') => void;
   onOtpDetected?: (otp: string) => void;
+  onReceiptGenerated?: (ack: string, receiptScreenshot?: string) => void;
 }
 
 export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
@@ -19,6 +20,7 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
   workflowTarget,
   onExecutionStateChange,
   onOtpDetected,
+  onReceiptGenerated,
 }) => {
   const [chaosEnabled, setChaosEnabled] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -111,11 +113,63 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
     if (!sessionId) return;
     setIsSubmittingOtp(true);
     setAuthError(null);
+
+    // 1. Log OTP submission initiation so right terminal updates immediately
+    const tsNow = new Date().toISOString();
+    setEvents(prev => [
+      ...prev,
+      {
+        step_index: 4,
+        step_name: 'OTP_SUBMITTING',
+        status: 'RUNNING',
+        message: `Authorizing citizen verification: Typing OTP "${codeToSubmit}" into portal #citizen_otp and confirming statutory consent...`,
+        timestamp_utc: tsNow,
+      }
+    ]);
+
     try {
       const res = await authorizeOtp(sessionId, codeToSubmit);
       setReceiptAck(res.acknowledgement_number);
+
+      // 2. Visually display the typed OTP on the Playwright virtual screen
+      if (res.otp_entered_screenshot_base64) {
+        setCurrentScreenshot(res.otp_entered_screenshot_base64);
+        setEvents(prev => [
+          ...prev,
+          {
+            step_index: 4,
+            step_name: 'OTP_ENTERED',
+            status: 'RUNNING',
+            message: `OTP ${codeToSubmit} successfully entered into portal DOM. Triggering final authorization and submission...`,
+            timestamp_utc: new Date().toISOString(),
+            screenshot_base64: res.otp_entered_screenshot_base64
+          }
+        ]);
+        // Brief pause so the typed state is visible to user before the confirmed receipt renders
+        await new Promise(r => setTimeout(r, 600));
+      }
+
+      // 3. Visually display the OFFICIAL STAMPED RECEIPT screenshot from the government portal
+      if (res.screenshot_base64) {
+        setCurrentScreenshot(res.screenshot_base64);
+      }
+
+      // 4. Record official receipt generation in execution event log
+      setEvents(prev => [
+        ...prev,
+        {
+          step_index: 4,
+          step_name: 'OFFICIAL_STAMPED_RECEIPT',
+          status: 'COMPLETED',
+          message: `Official Stamped Receipt Generated! State Acknowledgement Ref: ${res.acknowledgement_number}`,
+          timestamp_utc: new Date().toISOString(),
+          screenshot_base64: res.screenshot_base64
+        }
+      ]);
+
       setStatus('VERIFIED');
       onExecutionStateChange?.('VERIFIED');
+      onReceiptGenerated?.(res.acknowledgement_number, res.screenshot_base64);
     } catch (e: any) {
       console.error('OTP authorization failed', e);
       setAuthError(e?.message || 'Government portal rejected OTP authentication. Please verify the code.');
@@ -272,6 +326,22 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
               <div className="absolute top-4 left-4 bg-[#C93B2B] text-white px-3 py-1.5 rounded-full text-xs font-mono font-bold flex items-center space-x-1.5 shadow-2xl animate-bounce">
                 <AlertTriangle className="w-4 h-4" />
                 <span>HTTP 502 CAUGHT: Self-Healing Active</span>
+              </div>
+            )}
+
+            {/* OTP Entry In Progress Badge */}
+            {isSubmittingOtp && (
+              <div className="absolute top-4 right-4 bg-amber-600 text-white px-3 py-1.5 rounded-full text-xs font-mono font-bold flex items-center space-x-1.5 shadow-2xl animate-pulse">
+                <Lock className="w-3.5 h-3.5" />
+                <span>Entering OTP in Portal DOM...</span>
+              </div>
+            )}
+
+            {/* Receipt Confirmed Badge */}
+            {status === 'VERIFIED' && receiptAck && (
+              <div className="absolute top-4 right-4 bg-emerald-600 text-white px-3 py-1.5 rounded-full text-xs font-mono font-bold flex items-center space-x-1.5 shadow-2xl animate-in fade-in">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>OFFICIAL STAMPED RECEIPT GENERATED</span>
               </div>
             )}
           </div>

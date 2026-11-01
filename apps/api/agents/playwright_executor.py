@@ -419,6 +419,10 @@ class PlaywrightBureaucracyAgent:
                 await page.type("#citizen_otp", otp_code.strip(), delay=100)
                 await page.check("#citizen_consent")
                 await asyncio.sleep(0.3)
+
+                # Capture transitional screenshot showing typed OTP and consent before triggering submission
+                shot_otp_entered = await self._capture_screenshot(page)
+
                 await page.click("#btn-authorize-final")
 
                 # Wait for portal response: receipt or error
@@ -449,6 +453,16 @@ class PlaywrightBureaucracyAgent:
                 # Confirmed Receipt Container
                 ack_elem = await page.query_selector("#ack-number")
                 ack_no = (await ack_elem.inner_text()).strip() if ack_elem else f"UP-EDIST-2026-{int(time.time()) % 1000000}"
+
+                try:
+                    receipt_box = await page.query_selector("#receipt-container")
+                    if receipt_box:
+                        await receipt_box.scroll_into_view_if_needed()
+                except Exception:
+                    pass
+
+                # Allow full CSS render & SVG repaint of the receipt
+                await asyncio.sleep(0.4)
                 shot_receipt = await self._capture_screenshot(page)
                 is_successful = True
 
@@ -457,11 +471,14 @@ class PlaywrightBureaucracyAgent:
                     "acknowledgement_number": ack_no,
                     "status": "SUBMITTED",
                     "screenshot_base64": shot_receipt,
+                    "otp_entered_screenshot_base64": shot_otp_entered,
                     "message": "Official submission stamped and recorded by State Government Portal."
                 }
             finally:
                 # If transaction successfully filed and stamped, cleanly close browser context
                 if is_successful:
+                    # Let the visible browser window stay on the stamped receipt for 2s so the citizen sees it live
+                    await asyncio.sleep(2.0)
                     try:
                         await browser.close()
                     except Exception:

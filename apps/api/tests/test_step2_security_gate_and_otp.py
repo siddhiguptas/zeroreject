@@ -90,3 +90,39 @@ def test_scenario_b_step2_pass_unlocks_compile():
     assert comp_data["session_id"] == session_id
     assert comp_data["execution_ready"] is True
     assert len(comp_data["assets"]) >= 3
+
+
+def test_authorize_otp_schema_and_screenshot_contract(monkeypatch):
+    """
+    Test that authorize-otp endpoint correctly formats FinalSubmissionReceipt with
+    screenshot_base64 and otp_entered_screenshot_base64 fields for live frontend rendering.
+    """
+    from apps.api.agents.playwright_executor import playwright_agent
+
+    dummy_session = "test_otp_receipt_session_003"
+    fake_shot_otp = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    fake_shot_receipt = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
+    async def mock_submit_otp(session_id: str, otp_code: str):
+        return {
+            "success": True,
+            "acknowledgement_number": "UP-EDIST-2026-999999",
+            "status": "SUBMITTED",
+            "screenshot_base64": fake_shot_receipt,
+            "otp_entered_screenshot_base64": fake_shot_otp,
+            "message": "Official submission stamped and recorded by State Government Portal."
+        }
+
+    monkeypatch.setattr(playwright_agent, "submit_otp_and_finalize", mock_submit_otp)
+
+    res = client.post(
+        "/api/execution/authorize-otp",
+        json={"session_id": dummy_session, "otp_code": "123456", "citizen_consent": True}
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["session_id"] == dummy_session
+    assert data["acknowledgement_number"] == "UP-EDIST-2026-999999"
+    assert data["filing_status"] == "CONFIRMED_AND_STAMPED"
+    assert data["screenshot_base64"] == fake_shot_receipt
+    assert data["otp_entered_screenshot_base64"] == fake_shot_otp

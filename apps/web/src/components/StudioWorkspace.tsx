@@ -54,6 +54,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
   >('IDLE');
   const [otpCode, setOtpCode] = useState('');
   const [receiptAck, setReceiptAck] = useState<string | null>(null);
+  const [receiptScreenshot, setReceiptScreenshot] = useState<string | null>(null);
   const [isSubmittingOtp, setIsSubmittingOtp] = useState(false);
 
   // Custom Document Upload State
@@ -78,6 +79,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
     setCompileData(null);
     setPlaywrightStatus('IDLE');
     setReceiptAck(null);
+    setReceiptScreenshot(null);
     setUploadError(null);
     setActiveStep(1);
   };
@@ -96,6 +98,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
     setCompileData(null);
     setPlaywrightStatus('IDLE');
     setReceiptAck(null);
+    setReceiptScreenshot(null);
 
     try {
       const res = await uploadDocument(currentSessionId, docType, file);
@@ -195,6 +198,9 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
     try {
       const res = await authorizeOtp(sessionId, code);
       setReceiptAck(res.acknowledgement_number);
+      if (res.screenshot_base64) {
+        setReceiptScreenshot(res.screenshot_base64);
+      }
       setPlaywrightStatus('VERIFIED');
       onPlaywrightStatusChange?.('VERIFIED');
     } catch (e: any) {
@@ -1014,6 +1020,10 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                   onOtpDetected={(otp) => {
                     // Retain detected OTP without auto-injecting into input
                   }}
+                  onReceiptGenerated={(ack, shot) => {
+                    setReceiptAck(ack);
+                    if (shot) setReceiptScreenshot(shot);
+                  }}
                 />
 
                 {/* Advance CTA to Step 5 */}
@@ -1091,6 +1101,24 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                       <span className="text-gray-700 truncate max-w-[200px]">SHA-256 Verified (IT Act 2000)</span>
                     </div>
                   </div>
+
+                  {/* Playwright Portal Live Receipt Viewport */}
+                  {receiptScreenshot && (
+                    <div className="max-w-xl mx-auto rounded-xl border border-slate-700 bg-slate-900 overflow-hidden shadow-lg p-3 text-left">
+                      <div className="text-[11px] font-mono text-slate-400 px-1 pb-2 flex items-center justify-between border-b border-slate-800 mb-2">
+                        <span className="flex items-center gap-1.5 text-emerald-400 font-bold">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          OFFICIAL STAMPED RECEIPT GENERATED
+                        </span>
+                        <span className="text-slate-400 font-mono text-[10px]">Playwright Chromium 130</span>
+                      </div>
+                      <img
+                        src={`data:image/jpeg;base64,${receiptScreenshot}`}
+                        alt="Official Target Portal Stamped Receipt"
+                        className="w-full h-auto rounded border border-slate-800 object-contain shadow-inner"
+                      />
+                    </div>
+                  )}
 
                   {/* Action Buttons */}
                   <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
