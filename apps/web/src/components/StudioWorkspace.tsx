@@ -69,19 +69,38 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const sigInputRef = useRef<HTMLInputElement | null>(null);
 
+  const handleResetSession = () => {
+    const freshId = 'sess_live_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 6);
+    setSessionId(freshId);
+    setUploadedDocs({});
+    setReconciliation(null);
+    setCompileData(null);
+    setPlaywrightStatus('IDLE');
+    setReceiptAck(null);
+    setUploadError(null);
+    setActiveStep(1);
+  };
+
   const handleFileUpload = async (docType: string, file: File) => {
     setUploadError(null);
     setUploadingDocType(docType);
 
     let currentSessionId = sessionId;
-    if (!currentSessionId) {
-      currentSessionId = 'sess_' + Math.random().toString(36).substring(2, 10);
+    if (!currentSessionId || !currentSessionId.startsWith('sess_live_')) {
+      currentSessionId = 'sess_live_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 6);
       setSessionId(currentSessionId);
+      // Reset prior reconciliation when beginning fresh document upload
+      setReconciliation(null);
+      setCompileData(null);
+      setPlaywrightStatus('IDLE');
+      setReceiptAck(null);
     }
 
     try {
       const res = await uploadDocument(currentSessionId, docType, file);
-      setUploadedDocs(prev => ({ ...prev, [docType]: res }));
+      // Map both 'pan' and 'marksheet' to the secondary slot key
+      const key = (docType === 'pan' || docType === 'marksheet') ? 'pan' : docType;
+      setUploadedDocs(prev => ({ ...prev, [key]: res }));
     } catch (err: any) {
       setUploadError(err?.message || `Failed to upload and extract ${docType}`);
     } finally {
@@ -97,19 +116,10 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
 
     const hasFront = Boolean(uploadedDocs['aadhaar_front'] || uploadedDocs['aadhaar']);
     const hasBack = Boolean(uploadedDocs['aadhaar_back']);
-    const hasSec = Boolean(uploadedDocs['pan']);
-    const hasPhoto = Boolean(uploadedDocs['portrait']);
-    const hasSig = Boolean(uploadedDocs['signature']);
+    const hasSec = Boolean(uploadedDocs['pan'] || uploadedDocs['marksheet']);
 
-    const missing: string[] = [];
-    if (!hasFront) missing.push('Aadhaar Front');
-    if (!hasBack) missing.push('Aadhaar Back');
-    if (!hasSec) missing.push('Secondary ID (Marksheet / PAN)');
-    if (!hasPhoto) missing.push('Citizen Photo');
-    if (!hasSig) missing.push('Signature Scan');
-
-    if (missing.length > 0) {
-      setUploadError(`Please upload all mandatory documents before running audit: ${missing.join(', ')}.`);
+    if (!hasFront && !hasSec) {
+      setUploadError('Please upload at least Primary Identity (Aadhaar Front) and Secondary ID (Marksheet / PAN).');
       return;
     }
 
@@ -397,9 +407,14 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
 
               {/* Intake Mode Switcher */}
               <div className="flex flex-wrap items-center justify-between gap-3 bg-[#EFECE4] p-1.5 rounded-xl border border-[#DFDBD2]">
-                <div className="flex space-x-1">
+                <div className="flex flex-wrap items-center gap-1">
                   <button
-                    onClick={() => setIntakeMode('upload')}
+                    onClick={() => {
+                      setIntakeMode('upload');
+                      if (!sessionId || !sessionId.startsWith('sess_live_')) {
+                        handleResetSession();
+                      }
+                    }}
                     className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-mono font-semibold transition-all ${
                       intakeMode === 'upload'
                         ? 'bg-[#162A45] text-white shadow-sm'
@@ -421,6 +436,16 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                     <span>⚡ 1-Click Evaluation Packet (Sample Scans)</span>
                   </button>
                 </div>
+
+                {intakeMode === 'upload' && Object.keys(uploadedDocs).length > 0 && (
+                  <button
+                    onClick={handleResetSession}
+                    className="flex items-center space-x-1.5 text-xs font-mono font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded-lg transition-all"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reset / Upload Different Documents</span>
+                  </button>
+                )}
 
                 {intakeMode === 'sample' && (
                   <button
@@ -572,10 +597,10 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                         </p>
                       </div>
 
-                      {uploadingDocType === 'pan' ? (
+                      {uploadingDocType === 'pan' || uploadingDocType === 'marksheet' ? (
                         <div className="py-5 flex flex-col items-center justify-center text-xs font-mono text-[#162A45] space-y-1.5">
                           <Loader2 className="w-5 h-5 animate-spin text-[#162A45]" />
-                          <span className="text-[10px]">Parsing PAN Card...</span>
+                          <span className="text-[10px]">Parsing Document...</span>
                         </div>
                       ) : uploadedDocs['pan'] ? (
                         <div className="bg-emerald-50 border border-emerald-300 rounded p-2 text-[10px] font-mono text-emerald-950 space-y-1">
@@ -584,9 +609,12 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                             <span className="truncate">{uploadedDocs['pan'].filename}</span>
                           </div>
                           <div className="text-[9px] text-emerald-900 border-t border-emerald-200 pt-1 space-y-0.5">
-                            <div>Name: <strong>{uploadedDocs['pan'].extracted_fields.full_name || 'Detected in Scan'}</strong></div>
-                            <div>{uploadedDocs['pan'].extracted_fields.id_number?.startsWith('Roll') ? 'Roll No' : 'PAN / ID'}: <strong>{uploadedDocs['pan'].extracted_fields.id_number || 'Matched'}</strong></div>
-                            <div>Father: <strong>{uploadedDocs['pan'].extracted_fields.father_or_spouse_name || 'Extracted'}</strong></div>
+                            <div>Name: <strong>{uploadedDocs['pan'].extracted_fields.full_name || 'NOT FOUND'}</strong></div>
+                            <div>{uploadedDocs['pan'].extracted_fields.id_number?.startsWith('Roll') ? 'Roll No' : 'PAN / ID'}: <strong>{uploadedDocs['pan'].extracted_fields.id_number || 'NOT FOUND'}</strong></div>
+                            <div>Father: <strong>{uploadedDocs['pan'].extracted_fields.father_or_spouse_name || 'NOT FOUND'}</strong></div>
+                            {uploadedDocs['pan'].extracted_fields.dob && (
+                              <div>DOB: <strong>{uploadedDocs['pan'].extracted_fields.dob}</strong></div>
+                            )}
                           </div>
                           <span className="text-[8px] text-blue-700 underline block pt-0.5">Click to replace</span>
                         </div>
@@ -815,7 +843,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                     onClick={() => setActiveStep(2)}
                     className="flex items-center space-x-2 bg-[#162A45] hover:bg-[#1f3a5e] text-white px-5 py-2.5 rounded-lg text-xs font-semibold shadow-sm transition-all"
                   >
-                    <span>Run Virtual Lekhpal &amp; Phonetic Audit (Step 2)</span>
+                    <span>View 4-Gate Lekhpal Audit &amp; Matrix (Step 2)</span>
                     <ArrowRight className="w-4 h-4 text-amber-300" />
                   </button>
                 </div>

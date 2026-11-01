@@ -86,27 +86,30 @@ async def stream_playwright_execution(
         app_dob = (
             (aadhaar_front_doc.dob if aadhaar_front_doc and aadhaar_front_doc.dob else None)
             or (marksheet_doc.dob if marksheet_doc and marksheet_doc.dob else None)
-            or next((d.dob for d in docs if d.dob), "28/09/2006")
+            or next((d.dob for d in docs if d.dob), "")
         )
 
     app_pin = demo.get("app_pin")
     if not app_pin or app_pin.startswith("["):
         app_pin = (
             (aadhaar_back_doc.pincode if aadhaar_back_doc and aadhaar_back_doc.pincode else None)
-            or next((d.pincode for d in docs if d.pincode), "274204")
+            or next((d.pincode for d in docs if d.pincode), "")
         )
 
     app_district = demo.get("app_district")
     if not app_district or app_district.startswith("["):
         app_district = (
             (aadhaar_back_doc.district if aadhaar_back_doc and aadhaar_back_doc.district else None)
-            or "Deoria"
+            or (recon.postal_details.get("district") if recon and recon.postal_details else "")
+            or ""
         )
+
+    app_state = (recon.postal_details.get("state") if recon and recon.postal_details else "") or ""
 
     app_address = (
         (aadhaar_back_doc.address if aadhaar_back_doc and aadhaar_back_doc.address else None)
         or demo.get("app_address")
-        or f"Dist. {app_district}, Uttar Pradesh - {app_pin}"
+        or (f"Dist. {app_district}, {app_state} - {app_pin}" if app_district and app_pin else "")
     )
 
     applicant_data = {

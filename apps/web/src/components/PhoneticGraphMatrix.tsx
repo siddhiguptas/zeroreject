@@ -157,18 +157,26 @@ export const PhoneticGraphMatrix: React.FC<PhoneticGraphMatrixProps> = ({
           <div className="bg-white border border-emerald-300 rounded-lg p-3.5 space-y-2 shadow-xs">
             <div className="flex justify-between items-center text-[10px] font-mono">
               <span className="text-gray-500 font-bold">GATE 2</span>
-              <span className="bg-emerald-100 text-emerald-900 px-1.5 py-0.5 rounded font-bold">
-                PASSED ✓
+              <span className={`px-1.5 py-0.5 rounded font-bold ${
+                reconciliation?.four_gates?.gate2_checksum_qr?.status === 'PASSED'
+                  ? 'bg-emerald-100 text-emerald-900'
+                  : 'bg-amber-100 text-amber-900'
+              }`}>
+                {reconciliation?.four_gates?.gate2_checksum_qr?.status === 'PASSED' ? 'PASSED ✓' : 'FLAGGED ⚠️'}
               </span>
             </div>
             <h4 className="font-sans font-bold text-xs text-[#111625]">
               Cryptographic Checksum &amp; QR
             </h4>
             <div className="text-[11px] font-mono text-gray-600 space-y-1">
-              <div className="text-emerald-700 font-medium">✓ Verhoeff D5 Checksum Passed</div>
-              <div className="text-emerald-700 font-medium">✓ PAN Structural Match (Individual P)</div>
-              <div className="text-[10px] text-gray-500 bg-[#F8F7F4] p-1 rounded">
-                QR matrix cross-verified with OCR
+              <div className={reconciliation?.four_gates?.gate2_checksum_qr?.aadhaar_verhoeff_valid ? "text-emerald-700 font-medium" : "text-amber-700 font-medium"}>
+                {reconciliation?.four_gates?.gate2_checksum_qr?.aadhaar_verhoeff_valid ? "✓ Verhoeff D5 Checksum Valid" : "⚠ Verhoeff Checksum Deficient"}
+              </div>
+              <div className="text-emerald-700 font-medium truncate">
+                ✓ {reconciliation?.four_gates?.gate2_checksum_qr?.pan_entity_type || 'Secondary Document Integrity Verified'}
+              </div>
+              <div className="text-[10px] text-gray-500 bg-[#F8F7F4] p-1 rounded truncate">
+                {reconciliation?.four_gates?.gate2_checksum_qr?.details || 'Optical matrix cross-verified with OCR'}
               </div>
             </div>
           </div>
@@ -177,18 +185,26 @@ export const PhoneticGraphMatrix: React.FC<PhoneticGraphMatrixProps> = ({
           <div className="bg-white border border-emerald-300 rounded-lg p-3.5 space-y-2 shadow-xs">
             <div className="flex justify-between items-center text-[10px] font-mono">
               <span className="text-gray-500 font-bold">GATE 3</span>
-              <span className="bg-emerald-100 text-emerald-900 px-1.5 py-0.5 rounded font-bold">
-                PASSED ✓
+              <span className={`px-1.5 py-0.5 rounded font-bold ${
+                reconciliation?.four_gates?.gate3_statutory_rules?.status === 'PASSED'
+                  ? 'bg-emerald-100 text-emerald-900'
+                  : 'bg-red-100 text-red-900'
+              }`}>
+                {reconciliation?.four_gates?.gate3_statutory_rules?.status === 'PASSED' ? 'PASSED ✓' : 'DISCREPANCY ⚠️'}
               </span>
             </div>
             <h4 className="font-sans font-bold text-xs text-[#111625]">
               Statutory Eligibility &amp; Cutoff
             </h4>
             <div className="text-[11px] font-mono text-gray-600 space-y-1">
-              <div className="text-emerald-700 font-medium">✓ Income: ₹1,84,000 &lt;= ₹2,50,000</div>
-              <div className="text-emerald-700 font-medium">✓ Valid 3-Year Statutory Window</div>
-              <div className="text-[10px] text-gray-500 bg-[#F8F7F4] p-1 rounded">
-                DOB verified against 10th marksheet
+              <div className="text-[#162A45] font-medium truncate">
+                DOB Proof: <strong>{reconciliation.dob_reconciliation?.aadhaar_dob || 'NOT FOUND'}</strong>
+              </div>
+              <div className={reconciliation.dob_reconciliation?.match ? "text-emerald-700 font-medium" : "text-red-700 font-medium"}>
+                {reconciliation.dob_reconciliation?.match ? "✓ DOB Consistent Across IDs" : "✗ DOB Discrepancy Detected"}
+              </div>
+              <div className="text-[10px] text-gray-500 bg-[#F8F7F4] p-1 rounded truncate">
+                {reconciliation.four_gates?.gate3_statutory_rules?.statutory_validity_window || 'Valid statutory verification timeline'}
               </div>
             </div>
           </div>
@@ -197,18 +213,20 @@ export const PhoneticGraphMatrix: React.FC<PhoneticGraphMatrixProps> = ({
           <div className="bg-white border border-emerald-300 rounded-lg p-3.5 space-y-2 shadow-xs">
             <div className="flex justify-between items-center text-[10px] font-mono">
               <span className="text-gray-500 font-bold">GATE 4</span>
-              <span className="bg-emerald-100 text-emerald-900 px-1.5 py-0.5 rounded font-bold">
-                PASSED ✓
+              <span className={`px-1.5 py-0.5 rounded font-bold ${
+                postal_reconciliation.valid ? 'bg-emerald-100 text-emerald-900' : 'bg-red-100 text-red-900'
+              }`}>
+                {postal_reconciliation.valid ? 'PASSED ✓' : 'FAILED ✗'}
               </span>
             </div>
             <h4 className="font-sans font-bold text-xs text-[#111625]">
               LGD Postal &amp; Tehsil Match
             </h4>
             <div className="text-[11px] font-mono text-gray-600 space-y-1">
-              <div>PIN: <strong className="text-emerald-800">{postal_reconciliation.pincode}</strong></div>
+              <div>PIN: <strong className={postal_reconciliation.valid ? "text-emerald-800" : "text-red-700"}>{postal_reconciliation.pincode}</strong></div>
               <div>Tehsil: <strong className="text-[#162A45]">{postal_reconciliation.taluka_or_subdistrict}</strong></div>
-              <div className="text-[10px] text-gray-500 bg-[#F8F7F4] p-1 rounded">
-                {postal_reconciliation.district || 'Deoria'}, {postal_reconciliation.state || 'UP'} (0% district drift)
+              <div className="text-[10px] text-gray-500 bg-[#F8F7F4] p-1 rounded truncate">
+                {postal_reconciliation.district || 'NOT FOUND'}, {postal_reconciliation.state || 'NOT FOUND'}
               </div>
             </div>
           </div>
@@ -271,7 +289,11 @@ export const PhoneticGraphMatrix: React.FC<PhoneticGraphMatrixProps> = ({
               </div>
               <div className="flex justify-between bg-[#F8F7F4] p-1.5 rounded border border-[#DFDBD2]">
                 <span className="text-gray-500">PAN / Marksheet:</span>
-                <span className="font-semibold text-[#C93B2B]">{name_reconciliation.original_b}</span>
+                <span className={`font-semibold ${
+                  name_reconciliation.pass_threshold ? 'text-emerald-700' : 'text-[#C93B2B]'
+                }`}>
+                  {name_reconciliation.original_b}
+                </span>
               </div>
             </div>
 
@@ -286,8 +308,8 @@ export const PhoneticGraphMatrix: React.FC<PhoneticGraphMatrixProps> = ({
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Initial Expansion:</span>
-                <span className="text-amber-700 font-bold">
-                  {name_reconciliation.initial_expansion_detected ? 'DETECTED (Curable)' : 'EXACT'}
+                <span className={name_reconciliation.initial_expansion_detected ? "text-amber-700 font-bold" : "text-emerald-700 font-bold"}>
+                  {name_reconciliation.initial_expansion_detected ? 'DETECTED (Curable)' : (name_reconciliation.pass_threshold ? 'MATCHED ✓' : 'MISMATCH ✗')}
                 </span>
               </div>
             </div>
@@ -307,7 +329,11 @@ export const PhoneticGraphMatrix: React.FC<PhoneticGraphMatrixProps> = ({
               </div>
               <div className="flex justify-between bg-[#F8F7F4] p-1.5 rounded border border-[#DFDBD2]">
                 <span className="text-gray-500">Secondary ID:</span>
-                <span className="font-semibold text-[#162A45]">{father_reconciliation.original_b}</span>
+                <span className={`font-semibold ${
+                  father_reconciliation.pass_threshold ? 'text-emerald-700' : 'text-[#C93B2B]'
+                }`}>
+                  {father_reconciliation.original_b}
+                </span>
               </div>
             </div>
 
@@ -318,8 +344,8 @@ export const PhoneticGraphMatrix: React.FC<PhoneticGraphMatrixProps> = ({
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Pass Threshold:</span>
-                <span className="text-emerald-700 font-bold">
-                  {father_reconciliation.pass_threshold ? 'PASSED (>= 0.85)' : 'FAILED'}
+                <span className={father_reconciliation.pass_threshold ? "text-emerald-700 font-bold" : "text-[#C93B2B] font-bold"}>
+                  {father_reconciliation.pass_threshold ? 'PASSED (>= 0.85)' : 'MISMATCH (< 0.85)'}
                 </span>
               </div>
             </div>

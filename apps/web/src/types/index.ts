@@ -86,6 +86,8 @@ export interface ReconciliationResponse {
   father_reconciliation: PhoneticBreakdown;
   dob_reconciliation: {
     dob?: string;
+    aadhaar_dob?: string;
+    pan_dob?: string;
     match: boolean;
   };
   postal_reconciliation: PostalValidationResult;

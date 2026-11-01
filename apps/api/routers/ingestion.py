@@ -5,7 +5,7 @@ import shutil
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.core.audit_logger import audit_logger
@@ -13,6 +13,7 @@ from apps.api.core.config import settings
 from apps.api.core.database import get_db
 from apps.api.models.entities import (
     AuditSession,
+    CompiledAsset,
     ExtractedDocument,
     ReconciliationRecord,
 )
@@ -20,6 +21,7 @@ from apps.api.schemas.contracts import (
     DocumentUploadResponse,
     ExtractedFieldData,
     LoadSamplePacketRequest,
+    PostalValidationResult,
     ReconcileSessionRequest,
     ReconciliationResponse,
 )
@@ -139,8 +141,25 @@ async def upload_document(
             )
 
     actual_doc_type = doc_type
-    if doc_type == "pan" and ("Marksheet" in extracted.detected_script or "CBSE" in extracted.detected_script or (extracted.id_number and extracted.id_number.startswith("Roll"))):
+    if doc_type == "pan" and ("Marksheet" in (extracted.detected_script or "") or "CBSE" in (extracted.detected_script or "") or (extracted.id_number and str(extracted.id_number).startswith("Roll"))):
         actual_doc_type = "marksheet"
+
+    # Enforce strict slot replacement: purge any stale document for this slot in this session
+    slot_types_to_clear = [actual_doc_type]
+    if actual_doc_type in ["pan", "marksheet"]:
+        slot_types_to_clear = ["pan", "marksheet"]
+    elif actual_doc_type in ["aadhaar_front", "aadhaar"]:
+        slot_types_to_clear = ["aadhaar_front", "aadhaar"]
+
+    await db.execute(
+        delete(ExtractedDocument).where(
+            ExtractedDocument.session_id == session_id,
+            ExtractedDocument.doc_type.in_(slot_types_to_clear)
+        )
+    )
+    # Also invalidate any prior stale reconciliation and compiled assets for this session
+    await db.execute(delete(ReconciliationRecord).where(ReconciliationRecord.session_id == session_id))
+    await db.execute(delete(CompiledAsset).where(CompiledAsset.session_id == session_id))
 
     doc_entity = ExtractedDocument(
         session_id=session_id,
@@ -260,20 +279,15 @@ async def execute_4gate_reconciliation(
     marksheet_doc = extracted_docs.get("marksheet")
     secondary_doc = pan_doc or marksheet_doc
 
-    # Name extraction: resolve Primary ID vs Secondary ID
+    # Name extraction: resolve Primary ID vs Secondary ID (Pure extraction / Zero mock fallbacks)
     name_a = (
         (aadhaar_front_doc.full_name.strip() if (aadhaar_front_doc and aadhaar_front_doc.full_name and aadhaar_front_doc.full_name.strip()) else None)
-        or (secondary_doc.full_name.strip() if (secondary_doc and secondary_doc.full_name and secondary_doc.full_name.strip()) else None)
+        or "NOT FOUND"
     )
-    name_b = (secondary_doc.full_name.strip() if (secondary_doc and secondary_doc.full_name and secondary_doc.full_name.strip()) else None)
-
-    if not name_a and not name_b:
-        name_a = "Ramesh Kumar Sharma"
-        name_b = "RAMESH K SHARMA"
-    elif not name_a:
-        name_a = name_b
-    elif not name_b:
-        name_b = name_a
+    name_b = (
+        (secondary_doc.full_name.strip() if (secondary_doc and secondary_doc.full_name and secondary_doc.full_name.strip()) else None)
+        or "NOT FOUND"
+    )
 
     # Cross-document name reconciliation (wrapped in thread)
     name_breakdown = await asyncio.to_thread(phonetic_reconciler.reconcile_names, name_a, name_b)
@@ -282,53 +296,58 @@ async def execute_4gate_reconciliation(
     father_a = (
         (aadhaar_back_doc.father_or_spouse_name.strip() if (aadhaar_back_doc and aadhaar_back_doc.father_or_spouse_name and aadhaar_back_doc.father_or_spouse_name.strip()) else None)
         or (aadhaar_front_doc.father_or_spouse_name.strip() if (aadhaar_front_doc and aadhaar_front_doc.father_or_spouse_name and aadhaar_front_doc.father_or_spouse_name.strip()) else None)
-        or (secondary_doc.father_or_spouse_name.strip() if (secondary_doc and secondary_doc.father_or_spouse_name and secondary_doc.father_or_spouse_name.strip()) else None)
+        or "NOT FOUND"
     )
     father_b = (
         (secondary_doc.father_or_spouse_name.strip() if (secondary_doc and secondary_doc.father_or_spouse_name and secondary_doc.father_or_spouse_name.strip()) else None)
-        or father_a
+        or "NOT FOUND"
     )
-    if not father_a and not father_b:
-        father_a = ""
-        father_b = ""
-    elif not father_a:
-        father_a = father_b
-    elif not father_b:
-        father_b = father_a
 
     father_breakdown = await asyncio.to_thread(phonetic_reconciler.reconcile_names, father_a, father_b)
 
     # DOB match
-    dob_a = (
-        (aadhaar_front_doc.dob if (aadhaar_front_doc and aadhaar_front_doc.dob) else None)
-        or (secondary_doc.dob if (secondary_doc and secondary_doc.dob) else None)
-        or ""
-    )
-    dob_b = (secondary_doc.dob if (secondary_doc and secondary_doc.dob) else dob_a)
-    dob_match = (dob_a == dob_b) if (dob_a and dob_b) else True
+    dob_a = (aadhaar_front_doc.dob if (aadhaar_front_doc and aadhaar_front_doc.dob) else "NOT FOUND")
+    dob_b = (secondary_doc.dob if (secondary_doc and secondary_doc.dob) else "NOT FOUND")
+    dob_match = (dob_a == dob_b and dob_a != "NOT FOUND")
 
     # Gender extraction
-    gender_detected = "MALE"
+    gender_detected = "UNSPECIFIED"
     if aadhaar_front_doc and aadhaar_front_doc.gender:
         gender_detected = aadhaar_front_doc.gender
     elif secondary_doc and secondary_doc.gender:
         gender_detected = secondary_doc.gender
     elif any("FEMALE" in ((d.extraction_details or {}).get("raw_text", "") if isinstance(d.extraction_details, dict) else "") for d in extracted_docs.values()):
         gender_detected = "FEMALE"
+    elif any("MALE" in ((d.extraction_details or {}).get("raw_text", "") if isinstance(d.extraction_details, dict) else "") for d in extracted_docs.values()):
+        gender_detected = "MALE"
 
     # Live India Post PIN Code verification
     pincode_query = (
         (aadhaar_back_doc.pincode if (aadhaar_back_doc and aadhaar_back_doc.pincode) else None)
         or (aadhaar_front_doc.pincode if (aadhaar_front_doc and aadhaar_front_doc.pincode) else None)
-        or (secondary_doc.pincode if (secondary_doc and secondary_doc.pincode) else "")
+        or (secondary_doc.pincode if (secondary_doc and secondary_doc.pincode) else None)
     )
     doc_dist = (aadhaar_back_doc.district if (aadhaar_back_doc and aadhaar_back_doc.district) else None)
     doc_taluka = (aadhaar_back_doc.taluka if (aadhaar_back_doc and aadhaar_back_doc.taluka) else None)
-    postal_res = await phonetic_reconciler.validate_pincode_live(
-        pincode_query or "274204",
-        doc_district=doc_dist,
-        doc_taluka=doc_taluka
-    )
+    if pincode_query:
+        postal_res = await phonetic_reconciler.validate_pincode_live(
+            pincode_query,
+            doc_district=doc_dist,
+            doc_taluka=doc_taluka
+        )
+    else:
+        postal_res = PostalValidationResult(
+            pincode="NOT FOUND",
+            valid=False,
+            taluka_or_subdistrict="NOT FOUND",
+            district="NOT FOUND",
+            state="NOT FOUND",
+            post_offices=[],
+            latency_ms=0.0,
+            is_cached=False,
+            source="No PIN detected in uploaded documents",
+            is_fallback=True
+        )
 
     # Composite Rejection Risk Score
     risk_score, status, discrepancies, citations = phonetic_reconciler.compute_composite_risk_score(
@@ -338,7 +357,7 @@ async def execute_4gate_reconciliation(
         postal_valid=postal_res.valid
     )
 
-    # If minor discrepancies detected, retrieve real statutory RAG citations
+    # If discrepancies detected, retrieve real statutory RAG citations
     if citations:
         rag_citations = statutory_rag.search(
             query="name mismatch initial abbreviation father name variation",
@@ -351,12 +370,12 @@ async def execute_4gate_reconciliation(
                 for r in rag_citations[:2]
             ])
 
-    # Cryptographic Checksum & Optical QR Cross-Verification (Feature A)
+    # Cryptographic Checksum & Optical QR Cross-Verification
     aadhaar_num = (
         (aadhaar_back_doc.id_number if (aadhaar_back_doc and aadhaar_back_doc.id_number) else None)
-        or (aadhaar_front_doc.id_number if (aadhaar_front_doc and aadhaar_front_doc.id_number) else "4892 7104 3829")
+        or (aadhaar_front_doc.id_number if (aadhaar_front_doc and aadhaar_front_doc.id_number) else "NOT FOUND")
     )
-    is_verhoeff_valid = qr_verifier.validate_verhoeff(aadhaar_num)
+    is_verhoeff_valid = qr_verifier.validate_verhoeff(aadhaar_num) if aadhaar_num != "NOT FOUND" else False
 
     # Check if secondary document is an educational Marksheet or PAN card
     is_marksheet_secondary = bool(
@@ -370,25 +389,30 @@ async def execute_4gate_reconciliation(
     )
 
     if is_marksheet_secondary:
-        pan_num = secondary_doc.id_number if (secondary_doc and secondary_doc.id_number) else "Marksheet Document"
+        sec_id = secondary_doc.id_number if (secondary_doc and secondary_doc.id_number) else "Marksheet Document"
+        pan_num = sec_id
         pan_check = {
             "valid": True,
             "entity_code": "EDU_BOARD",
             "entity_description": "Secondary Education Board Marksheet / Certificate"
         }
-        gate2_details = f"Aadhaar Verhoeff D5 Checksum: {'VALID' if is_verhoeff_valid else 'VERIFIED'}. Secondary Document (10th Marksheet/CBSE) Verified for candidate & DOB integrity."
+        gate2_details = f"Aadhaar Verhoeff D5 Checksum: {'VALID' if is_verhoeff_valid else 'FAILED/NOT FOUND'}. Secondary Document (10th Marksheet/CBSE: {sec_id}) verified for candidate & DOB integrity."
     else:
-        pan_num = pan_doc.id_number if (pan_doc and pan_doc.id_number) else "ABCPS1234F"
-        pan_check = qr_verifier.validate_pan(pan_num)
-        gate2_details = f"Aadhaar Verhoeff D5 Checksum: {'VALID' if is_verhoeff_valid else 'FAILED'}. PAN 4th char: '{pan_check.get('entity_code', 'P')}' ({pan_check.get('entity_description', 'Individual')}). Optical OCR cross-referenced."
+        pan_num = pan_doc.id_number if (pan_doc and pan_doc.id_number) else "NOT FOUND"
+        if pan_num != "NOT FOUND":
+            pan_check = qr_verifier.validate_pan(pan_num)
+            gate2_details = f"Aadhaar Verhoeff D5 Checksum: {'VALID' if is_verhoeff_valid else 'FAILED'}. PAN 4th char: '{pan_check.get('entity_code', 'P')}' ({pan_check.get('entity_description', 'Individual')}). Optical OCR cross-referenced."
+        else:
+            pan_check = {"valid": False, "entity_code": "NONE", "entity_description": "Secondary PAN identifier not found"}
+            gate2_details = f"Aadhaar Verhoeff D5 Checksum: {'VALID' if is_verhoeff_valid else 'FAILED'}. Secondary PAN identifier missing (NOT FOUND)."
 
     # 4-Gate Virtual Lekhpal Scorecard (Dynamic Real Computations)
     four_gates = {
         "gate1_phonetic": {
             "gate_num": 1,
             "title": "Gate 1 — Cross-Script Phonetic & Token Graph",
-            "status": "PASS_CURABLE" if (name_breakdown.initial_expansion_detected or name_breakdown.jaro_winkler_score < 0.99) else "PASSED",
-            "verdict": "Curable Discrepancy (Initial Expansion & Inversion)" if name_breakdown.initial_expansion_detected else "Phonetic Similarity Confirmed",
+            "status": "PASS_CURABLE" if (name_breakdown.initial_expansion_detected or (name_breakdown.jaro_winkler_score < 0.99 and name_breakdown.pass_threshold)) else ("PASSED" if name_breakdown.pass_threshold else "FLAGGED"),
+            "verdict": "Curable Discrepancy (Initial Expansion & Inversion)" if name_breakdown.initial_expansion_detected else ("Phonetic Similarity Confirmed" if name_breakdown.pass_threshold else "Fatal Identity Mismatch across documents"),
             "double_metaphone": f"{name_breakdown.double_metaphone.primary_code_a} vs {name_breakdown.double_metaphone.primary_code_b}",
             "jaro_winkler": round(name_breakdown.jaro_winkler_score, 4),
             "token_sort_ratio": round(name_breakdown.token_sort_ratio, 4),
@@ -410,12 +434,11 @@ async def execute_4gate_reconciliation(
         "gate3_statutory_rules": {
             "gate_num": 3,
             "title": "Gate 3 — Statutory Eligibility, Cutoff & Expiry Gate",
-            "status": "PASSED",
-            "verdict": "Statutory Eligibility Confirmed",
-            "income_ceiling_check": "₹1,84,000 <= ₹2,50,000 (Compliant)",
-            "statutory_validity_window": "Issued within 3-year statutory revenue period",
-            "dob_proof_validity": "Secondary document verified for DOB consistency",
-            "details": "Family income verified below state ceiling. Certificate issued within valid statutory period."
+            "status": "PASSED" if (dob_match and dob_a != "NOT FOUND") else "FLAGGED",
+            "verdict": "Statutory Eligibility Confirmed" if (dob_match and dob_a != "NOT FOUND") else ("Date of Birth Mismatch" if dob_a != "NOT FOUND" and dob_b != "NOT FOUND" else "DOB Proof Incomplete"),
+            "statutory_validity_window": "Document verified against revenue eligibility timeline",
+            "dob_proof_validity": f"Primary DOB: {dob_a} vs Secondary DOB: {dob_b} ({'MATCHED' if dob_match else 'DISCREPANCY DETECTED'})",
+            "details": f"Cross-document age verification: Primary ID lists '{dob_a}', Secondary ID lists '{dob_b}'."
         },
         "gate4_jurisdiction": {
             "gate_num": 4,
@@ -427,7 +450,7 @@ async def execute_4gate_reconciliation(
             "district": postal_res.district,
             "state": postal_res.state,
             "api_latency_ms": round(postal_res.latency_ms, 1),
-            "details": f"PIN {postal_res.pincode} verified live via India Post API to {postal_res.taluka_or_subdistrict}, District {postal_res.district}. Zero jurisdiction drift."
+            "details": f"PIN {postal_res.pincode} verified live via India Post API to {postal_res.taluka_or_subdistrict}, District {postal_res.district}. Zero jurisdiction drift." if postal_res.valid else f"Postal code '{postal_res.pincode}' could not be matched to official LGD directory."
         }
     }
 
@@ -506,6 +529,7 @@ async def reconcile_uploaded_documents_session(
             detail="No uploaded documents found for this session. Please upload at least one identity document."
         )
 
-    extracted_docs = {d.doc_type: d for d in docs}
+    # Sort by document id ascending so latest upload for any slot takes precedence
+    extracted_docs = {d.doc_type: d for d in sorted(docs, key=lambda x: x.id or 0)}
     return await execute_4gate_reconciliation(req.session_id, req.workflow_target, extracted_docs, db)
 

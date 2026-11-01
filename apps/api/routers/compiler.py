@@ -72,10 +72,12 @@ def resolve_session_demographics(docs: list[ExtractedDocument], recon: Reconcili
     app_district = postal_details.get("district") or (recon.district_verified if recon and recon.district_verified else (aadhaar_back_doc.district if aadhaar_back_doc and aadhaar_back_doc.district else None))
 
     app_place = app_district or "[Place of Execution / City]"
+    app_state = postal_details.get("state") or ""
 
     app_address = phonetic_matrix.get("address") or (
-        f"Dist. {app_district}, Uttar Pradesh - {app_pin}" if app_district and app_pin
-        else (f"Dist. {app_district}" if app_district else "[Address Not Provided]")
+        f"Dist. {app_district}, {app_state} - {app_pin}" if app_district and app_pin and app_state
+        else (f"Dist. {app_district} - {app_pin}" if app_district and app_pin
+        else (f"Dist. {app_district}" if app_district else "[Address Not Provided]"))
     )
 
     app_id_aadhaar = phonetic_matrix.get("aadhaar_num") or (aadhaar_back_doc.id_number if aadhaar_back_doc and aadhaar_back_doc.id_number else (aadhaar_front_doc.id_number if aadhaar_front_doc and aadhaar_front_doc.id_number else ""))
@@ -83,7 +85,7 @@ def resolve_session_demographics(docs: list[ExtractedDocument], recon: Reconcili
     if marksheet_doc:
         sec_doc_name = "Secondary School Examination Marksheet"
         sec_doc_auth = "Central Board of Secondary Education (CBSE)"
-        sec_id_val = marksheet_doc.id_number or "Roll No. 23222162"
+        sec_id_val = marksheet_doc.id_number or "[Roll Number Not Specified]"
     elif pan_doc:
         sec_doc_name = "Permanent Account Number (PAN)"
         sec_doc_auth = "Income Tax Department, Govt. of India"
@@ -103,9 +105,9 @@ def resolve_session_demographics(docs: list[ExtractedDocument], recon: Reconcili
         name_a=app_name_aadhaar,
         name_b=app_name_sec,
         father_a=app_father,
-        father_b=getattr(marksheet_doc, "father_or_spouse_name", "") or getattr(pan_doc, "father_or_spouse_name", "") or app_father,
+        father_b=getattr(marksheet_doc, "father_or_spouse_name", "") or getattr(pan_doc, "father_or_spouse_name", "") or phonetic_matrix.get("father_b") or app_father,
         dob_a=app_dob,
-        dob_b=getattr(marksheet_doc, "dob", "") or getattr(pan_doc, "dob", "") or app_dob,
+        dob_b=getattr(marksheet_doc, "dob", "") or getattr(pan_doc, "dob", "") or phonetic_matrix.get("dob_b") or app_dob,
     )
 
     if disc_analysis["type"] == "EXACT_MATCH":

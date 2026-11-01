@@ -519,10 +519,10 @@ class DeterministicPhoneticReconciler:
         # Father name weighting (20%)
         if not father_breakdown.pass_threshold:
             risk += 25.0
-            discrepancies.append("Father/Guardian name mismatch across documents.")
+            discrepancies.append(f"Father/Guardian name mismatch across documents: '{father_breakdown.original_a}' vs '{father_breakdown.original_b}'.")
         elif father_breakdown.initial_expansion_detected:
             risk += 8.0
-            discrepancies.append("Father's name initial abbreviation variation detected (e.g., 'D. N. Sharma' vs 'Dina Nath Sharma').")
+            discrepancies.append(f"Father's name initial abbreviation variation detected: '{father_breakdown.original_a}' vs '{father_breakdown.original_b}'.")
             citations.append({
                 "statute": "EPFO Joint Declaration Circular No. WSU/2022/1/UIDAI",
                 "clause": "Para 3.2 - Father name initial expansion allowable with supporting school marksheet."

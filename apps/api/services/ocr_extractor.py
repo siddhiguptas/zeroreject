@@ -338,7 +338,7 @@ class FreeMultimodalOCRExtractor:
             data.gender = "OTHER"
 
         # 6. Parse C/O or Father / Guardian Name from Address / Back
-        co_match = re.search(r'(?:C/O|S/O|D/O|W/O|द्वारा)[:\s]+([a-zA-Z\s]{4,30})(?:[.,\n]|$)', text, re.IGNORECASE)
+        co_match = re.search(r'(?:C/O|S/O|D/O|W/O|SIO|S/0|C/0|D/0|W/0|द्वारा)[:\s.]+([a-zA-Z\t ]{3,30})(?:[.,\n]|$)', text, re.IGNORECASE)
         if co_match:
             cand_guardian = co_match.group(1).strip()
             if cand_guardian and not any(ign in cand_guardian.upper() for ign in ["ADDRESS", "ROAD", "VILL", "DIST"]):
@@ -656,28 +656,13 @@ class FreeMultimodalOCRExtractor:
                     best_cand = next((cf for cf in cand_fathers if surname and surname.upper() in cf.upper()), cand_fathers[0])
                     data.father_or_spouse_name = best_cand
 
-        # Fallbacks for sample documents if synthetic
+        # Deterministic Confidence & Status Evaluation (Zero assumptions / Zero mock fallbacks)
         if not data.full_name:
-            if "Ramesh Kumar Sharma" in text:
-                data.full_name = "Ramesh Kumar Sharma"
-                data.full_name_regional = "रमेश कुमार शर्मा"
-            elif "RAMESH K SHARMA" in text:
-                data.full_name = "RAMESH K SHARMA"
-            elif "SHARMA RAMESH KUMAR" in text:
-                data.full_name = "SHARMA RAMESH KUMAR"
+            data.full_name = ""
+            data.confidence = 0.35  # Low confidence indicator
+        else:
+            data.confidence = 0.95
 
-        if not data.father_or_spouse_name:
-            if "Dina Nath Sharma" in text or "DINA NATH SHARMA" in text:
-                data.father_or_spouse_name = "Dina Nath Sharma"
-            elif "D. N. Sharma" in text or "D. N. SHARMA" in text or "D.N. SHARMA" in text:
-                data.father_or_spouse_name = "D. N. Sharma"
-
-        if "Bakewar" in text and "Etawah" in text:
-            data.address = "Vill. Bakewar, Bharthana Road, Dist. Etawah, Uttar Pradesh - 206124"
-            if not data.pincode:
-                data.pincode = "206124"
-
-        data.confidence = 0.98 if data.full_name else 0.85
         return data
 
 ocr_extractor = FreeMultimodalOCRExtractor()
