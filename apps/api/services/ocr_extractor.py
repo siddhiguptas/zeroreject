@@ -1,6 +1,7 @@
 import io
 import os
 import re
+import shutil
 import time
 from typing import Any
 
@@ -13,9 +14,11 @@ from apps.api.core.audit_logger import audit_logger
 from apps.api.core.config import settings
 from apps.api.schemas.contracts import ExtractedFieldData
 
-# Set tesseract binary path if custom path exists
-if os.path.exists(settings.TESSERACT_CMD):
+# Set tesseract binary path if custom path exists, or auto-detect in PATH
+if settings.TESSERACT_CMD and os.path.exists(settings.TESSERACT_CMD):
     pytesseract.pytesseract.tesseract_cmd = settings.TESSERACT_CMD
+elif shutil.which("tesseract"):
+    pytesseract.pytesseract.tesseract_cmd = shutil.which("tesseract")
 
 # --- Cryptographic Verhoeff Algorithm for UIDAI Aadhaar Validation ---
 VERHOEFF_D = (

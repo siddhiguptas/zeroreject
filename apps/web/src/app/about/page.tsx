@@ -147,7 +147,7 @@ export default function AboutPage() {
           administrative appellate overhead for revenue departments.
         </p>
         <div className="pt-2 flex flex-wrap gap-2 text-[11px] font-mono">
-          <span className="bg-white border border-[#DFDBD2] px-2.5 py-1 rounded text-[#162A45]">FastAPI :8000</span>
+          <span className="bg-white border border-[#DFDBD2] px-2.5 py-1 rounded text-[#162A45]">FastAPI :8001</span>
           <span className="bg-white border border-[#DFDBD2] px-2.5 py-1 rounded text-[#162A45]">Next.js 14 App Router</span>
           <span className="bg-white border border-[#DFDBD2] px-2.5 py-1 rounded text-[#162A45]">Playwright Engine</span>
           <span className="bg-white border border-[#DFDBD2] px-2.5 py-1 rounded text-[#162A45]">OpenCV + Pillow</span>

@@ -532,7 +532,7 @@ class StatutoryAffidavitGenerator:
         story.append(Spacer(1, 10))
 
         # Scannable Real QR Code linking to real backend verification endpoint
-        base_api = api_base_url or "http://localhost:8000"
+        base_api = api_base_url or f"http://localhost:{settings.API_PORT}"
         verify_url = f"{base_api}/api/compiler/verify-declaration/{session_id}"
         qr_drawing = qr_verifier.create_pdf_qr_drawing(verify_url, size=46)
 
@@ -901,7 +901,7 @@ class StatutoryAffidavitGenerator:
 
         # Real verification QR
         receipt_qr = qr_verifier.create_pdf_qr_drawing(
-            f"http://localhost:8000/api/execution/receipt/{session_id}",
+            f"http://localhost:{settings.API_PORT}/api/execution/receipt/{session_id}",
             size=48
         )
         stamp_data = [

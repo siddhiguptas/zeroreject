@@ -85,10 +85,19 @@ class PlaywrightBureaucracyAgent:
 
             try:
                 playwright_instance = await async_playwright().start()
+                chromium_args = [
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--disable-setuid-sandbox",
+                ]
+                if not effective_headless:
+                    chromium_args.append("--start-maximized")
+
                 browser = await playwright_instance.chromium.launch(
                     headless=effective_headless,
                     slow_mo=settings.PLAYWRIGHT_SLOW_MO_MS,
-                    args=["--start-maximized"] if not effective_headless else []
+                    args=chromium_args
                 )
 
                 emit({

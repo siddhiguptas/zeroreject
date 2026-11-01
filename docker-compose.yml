@@ -1,24 +1,47 @@
 version: '3.8'
 
 services:
-  db:
-    image: pgvector/pgvector:pg16
-    container_name: zeroreject_postgres
-    restart: always
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
-      POSTGRES_DB: zeroreject
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: zeroreject_api
+    restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "8001:8001"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8001
+      - GOV_PORTAL_BASE_URL=http://gov_portal:8090
+      - PLAYWRIGHT_HEADLESS=true
+      - DATABASE_URL=sqlite+aiosqlite:///./zeroreject.db
     volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d zeroreject"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      - ./storage:/app/storage
+      - ./zeroreject.db:/app/zeroreject.db
 
-volumes:
-  pgdata:
+  gov_portal:
+    build:
+      context: .
+      dockerfile: Dockerfile.gov
+    container_name: zeroreject_gov_portal
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    environment:
+      - GOV_PORTAL_HOST=0.0.0.0
+      - GOV_PORTAL_PORT=8090
 
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=http://localhost:8001
+        - NEXT_PUBLIC_GOV_PORTAL_URL=http://localhost:8090
+    container_name: zeroreject_web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+      - gov_portal

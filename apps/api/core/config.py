@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     
     # API Server
     API_HOST: str = "0.0.0.0"
-    API_PORT: int = 8000
+    API_PORT: int = 8001
     
     # Target Government Portal Server
     GOV_PORTAL_HOST: str = "0.0.0.0"
@@ -35,11 +35,11 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-2.5-flash"
     DEFAULT_LLM_PROVIDER: str = "auto" # auto (best available), groq, openrouter, ollama, deterministic
     
-    # Local Deterministic OCR
-    TESSERACT_CMD: str = "/opt/homebrew/bin/tesseract"
+    # Local Deterministic OCR (auto-detected across Linux / macOS)
+    TESSERACT_CMD: str = "/usr/bin/tesseract" if os.path.exists("/usr/bin/tesseract") else "/opt/homebrew/bin/tesseract"
     
-    # Playwright Automation (Visible browser on desktop for full transparency)
-    PLAYWRIGHT_HEADLESS: bool = False
+    # Playwright Automation (Headless on cloud servers, visible on desktop when set to false)
+    PLAYWRIGHT_HEADLESS: bool = True
     PLAYWRIGHT_SLOW_MO_MS: int = 350
     
     # Storage Dirs
