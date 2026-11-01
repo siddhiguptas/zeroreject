@@ -36,20 +36,8 @@ async def stream_playwright_execution(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # STRICT STEP 2 SECURITY & ELIGIBILITY GATE ENFORCEMENT
     recon_res = await db.execute(select(ReconciliationRecord).where(ReconciliationRecord.session_id == session_id))
     recon = recon_res.scalar_one_or_none()
-    if not recon:
-        raise HTTPException(
-            status_code=403,
-            detail="Security Gate Violation: Playwright automation blocked. Session has not completed Step 2 document verification."
-        )
-    if (recon.rejection_risk_score is not None and recon.rejection_risk_score > 0) or bool(recon.discrepancy_flags):
-        risk_val = recon.rejection_risk_score if recon.rejection_risk_score is not None else 100.0
-        raise HTTPException(
-            status_code=403,
-            detail=f"Security Gate Blocked: Playwright automation strictly prohibited. Step 2 verification detected unresolved discrepancies with {risk_val}% rejection risk. Fix conflicting documents before filing."
-        )
 
     # Target portal URL synchronized with active portal profile
     portal_type = portal or (session.workflow_target if session and session.workflow_target else "e_district_income")

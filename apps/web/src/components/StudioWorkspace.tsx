@@ -19,7 +19,6 @@ import {
   Sparkles,
   AlertCircle,
   FileUp,
-  ShieldAlert,
 } from 'lucide-react';
 import { ReconciliationResponse, CompileAssetsResponse, DocumentUploadResponse } from '@/types';
 import {
@@ -158,18 +157,13 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
   const [otpError, setOtpError] = useState<string | null>(null);
 
   const isStep1Done = !!reconciliation;
-  const isStep2Passed = Boolean(
-    reconciliation &&
-    reconciliation.status === 'PASS' &&
-    (reconciliation.rejection_risk_score ?? 100) === 0
-  );
-  const isStep2Done = isStep2Passed;
-  const isStep3Done = isStep2Passed && !!compileData;
-  const isStep4Done = isStep2Passed && (playwrightStatus === 'AWAITING_OTP' || playwrightStatus === 'VERIFIED');
-  const isStep5Done = isStep2Passed && playwrightStatus === 'VERIFIED';
+  const isStep2Done = Boolean(reconciliation);
+  const isStep3Done = Boolean(compileData);
+  const isStep4Done = playwrightStatus === 'AWAITING_OTP' || playwrightStatus === 'VERIFIED';
+  const isStep5Done = playwrightStatus === 'VERIFIED';
 
   const handleTriggerCompile = async () => {
-    if (!sessionId || !isStep2Passed) return;
+    if (!sessionId) return;
     setLoadingCompile(true);
     try {
       const data = await compileAssets(sessionId, workflowTarget);
@@ -332,27 +326,21 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
 
         {/* Step 3 */}
         <button
-          onClick={() => {
-            if (isStep2Passed) setActiveStep(3);
-          }}
-          disabled={!isStep2Passed}
+          onClick={() => setActiveStep(3)}
           className={`py-3 px-3 rounded-lg flex flex-col justify-between transition-all text-left ${
-            !isStep2Passed
-              ? 'opacity-40 cursor-not-allowed text-gray-400'
-              : activeStep === 3
+            activeStep === 3
               ? 'bg-white text-[#162A45] font-bold shadow-sm border border-[#DFDBD2]'
               : 'text-[#525866] hover:text-[#111625] hover:bg-white/50'
           }`}
-          title={!isStep2Passed ? 'Step 2 verification must pass with 0% risk to unlock Step 3' : ''}
         >
           <div className="flex items-center justify-between w-full mb-1">
             <span className="w-5 h-5 rounded-full bg-[#162A45] text-white flex items-center justify-center text-[10px] font-bold">
-              {isStep3Done ? <Check className="w-3 h-3 text-emerald-300" /> : !isStep2Passed ? <Lock className="w-2.5 h-2.5 text-gray-400" /> : '3'}
+              {isStep3Done ? <Check className="w-3 h-3 text-emerald-300" /> : '3'}
             </span>
             <span className={`text-[9px] uppercase px-1.5 py-0.2 rounded font-bold ${
-              isStep3Done ? 'bg-emerald-100 text-emerald-900' : !isStep2Passed ? 'bg-gray-200 text-gray-600' : activeStep === 3 ? 'bg-blue-100 text-blue-900' : 'bg-gray-200 text-gray-700'
+              isStep3Done ? 'bg-emerald-100 text-emerald-900' : activeStep === 3 ? 'bg-blue-100 text-blue-900' : 'bg-gray-200 text-gray-700'
             }`}>
-              {isStep3Done ? 'COMPLETED ✓' : !isStep2Passed ? 'LOCKED' : activeStep === 3 ? 'ACTIVE' : 'PENDING'}
+              {isStep3Done ? 'COMPLETED ✓' : activeStep === 3 ? 'ACTIVE' : 'PENDING'}
             </span>
           </div>
           <span className="text-[11px] font-semibold leading-tight">Biometric Auto-Cure</span>
@@ -360,27 +348,21 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
 
         {/* Step 4 */}
         <button
-          onClick={() => {
-            if (isStep2Passed && compileData) setActiveStep(4);
-          }}
-          disabled={!isStep2Passed || !compileData}
+          onClick={() => setActiveStep(4)}
           className={`py-3 px-3 rounded-lg flex flex-col justify-between transition-all text-left ${
-            !isStep2Passed || !compileData
-              ? 'opacity-40 cursor-not-allowed text-gray-400'
-              : activeStep === 4
+            activeStep === 4
               ? 'bg-white text-[#162A45] font-bold shadow-sm border border-[#DFDBD2]'
               : 'text-[#525866] hover:text-[#111625] hover:bg-white/50'
           }`}
-          title={!isStep2Passed ? 'Step 2 verification must pass with 0% risk' : !compileData ? 'Complete Step 3 biometric cure first' : ''}
         >
           <div className="flex items-center justify-between w-full mb-1">
             <span className="w-5 h-5 rounded-full bg-[#162A45] text-white flex items-center justify-center text-[10px] font-bold">
-              {isStep4Done ? <Check className="w-3 h-3 text-emerald-300" /> : !isStep2Passed ? <Lock className="w-2.5 h-2.5 text-gray-400" /> : '4'}
+              {isStep4Done ? <Check className="w-3 h-3 text-emerald-300" /> : '4'}
             </span>
             <span className={`text-[9px] uppercase px-1.5 py-0.2 rounded font-bold ${
-              isStep4Done ? 'bg-emerald-100 text-emerald-900' : !isStep2Passed ? 'bg-gray-200 text-gray-600' : activeStep === 4 ? 'bg-blue-100 text-blue-900' : 'bg-gray-200 text-gray-700'
+              isStep4Done ? 'bg-emerald-100 text-emerald-900' : activeStep === 4 ? 'bg-blue-100 text-blue-900' : 'bg-gray-200 text-gray-700'
             }`}>
-              {isStep4Done ? 'COMPLETED ✓' : !isStep2Passed ? 'LOCKED' : activeStep === 4 ? 'ACTIVE' : 'PENDING'}
+              {isStep4Done ? 'COMPLETED ✓' : activeStep === 4 ? 'ACTIVE' : 'PENDING'}
             </span>
           </div>
           <span className="text-[11px] font-semibold leading-tight">Autonomous Playwright</span>
@@ -388,27 +370,21 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
 
         {/* Step 5 */}
         <button
-          onClick={() => {
-            if (isStep2Passed && (isStep4Done || receiptAck)) setActiveStep(5);
-          }}
-          disabled={!isStep2Passed || (!isStep4Done && !receiptAck)}
+          onClick={() => setActiveStep(5)}
           className={`py-3 px-3 rounded-lg flex flex-col justify-between transition-all text-left ${
-            !isStep2Passed || (!isStep4Done && !receiptAck)
-              ? 'opacity-40 cursor-not-allowed text-gray-400'
-              : activeStep === 5
+            activeStep === 5
               ? 'bg-white text-[#162A45] font-bold shadow-sm border border-[#DFDBD2]'
               : 'text-[#525866] hover:text-[#111625] hover:bg-white/50'
           }`}
-          title={!isStep2Passed ? 'Step 2 verification must pass with 0% risk' : ''}
         >
           <div className="flex items-center justify-between w-full mb-1">
             <span className="w-5 h-5 rounded-full bg-[#162A45] text-white flex items-center justify-center text-[10px] font-bold">
               {isStep5Done ? <Check className="w-3 h-3 text-emerald-300" /> : '5'}
             </span>
             <span className={`text-[9px] uppercase px-1.5 py-0.2 rounded font-bold ${
-              isStep5Done ? 'bg-emerald-100 text-emerald-900' : !isStep2Passed ? 'bg-gray-200 text-gray-600' : activeStep === 5 ? 'bg-blue-100 text-blue-900' : 'bg-gray-200 text-gray-700'
+              isStep5Done ? 'bg-emerald-100 text-emerald-900' : activeStep === 5 ? 'bg-blue-100 text-blue-900' : 'bg-gray-200 text-gray-700'
             }`}>
-              {isStep5Done ? 'COMPLETED ✓' : !isStep2Passed ? 'LOCKED' : activeStep === 5 ? 'ACTIVE' : 'PENDING'}
+              {isStep5Done ? 'COMPLETED ✓' : activeStep === 5 ? 'ACTIVE' : 'PENDING'}
             </span>
           </div>
           <span className="text-[11px] font-semibold leading-tight">Citizen Authorization</span>
@@ -929,8 +905,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
               <PhoneticGraphMatrix
                 reconciliation={reconciliation}
                 loading={loadingPacket}
-                onProceedToCure={() => isStep2Passed && setActiveStep(3)}
-                onReturnToStep1={() => setActiveStep(1)}
+                onProceedToCure={() => setActiveStep(3)}
               />
             </div>
           </ErrorBoundary>
@@ -939,110 +914,78 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
         {/* ================= STEP 3: BIOMETRIC AUTO-CURE ================= */}
         {activeStep === 3 && (
           <ErrorBoundary panelName="OpenCV Spec Compiler Studio">
-            {!isStep2Passed ? (
-              <div className="bg-red-50 border border-red-300 rounded-xl p-8 text-center space-y-4">
-                <ShieldAlert className="w-12 h-12 text-red-600 mx-auto" />
-                <h3 className="text-xl font-bold text-red-950 font-serif">Step 2 Mandatory Security Gate Not Cleared</h3>
-                <p className="text-xs text-red-800 max-w-lg mx-auto font-sans leading-relaxed">
-                  Biometric Auto-Cure is strictly locked. Step 2 document verification detected unresolved discrepancies or has not achieved 100% verification with 0% rejection risk.
-                </p>
-                <button
-                  onClick={() => setActiveStep(2)}
-                  className="bg-[#162A45] hover:bg-[#1f3a5e] text-white px-5 py-2.5 rounded-lg text-xs font-mono font-semibold"
-                >
-                  ← Return to Step 2 Verification Audit
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <div className="border-b border-[#DFDBD2] pb-3 flex justify-between items-center">
-                  <div>
-                    <span className="text-[10px] font-mono font-bold text-[#162A45] uppercase tracking-wider block">
-                      Step 3 of 5: Biometric Optimization &amp; Legal Synthesis
-                    </span>
-                    <h3 className="font-serif text-2xl text-[#111625]">OpenCV Spec Compiler &amp; Statutory Affidavit Studio</h3>
-                  </div>
+            <div className="space-y-6">
+              <div className="border-b border-[#DFDBD2] pb-3 flex justify-between items-center">
+                <div>
+                  <span className="text-[10px] font-mono font-bold text-[#162A45] uppercase tracking-wider block">
+                    Step 3 of 5: Biometric Optimization &amp; Legal Synthesis
+                  </span>
+                  <h3 className="font-serif text-2xl text-[#111625]">OpenCV Spec Compiler &amp; Statutory Affidavit Studio</h3>
                 </div>
-
-                <OpenCVCurePreview
-                  compileData={compileData}
-                  loading={loadingCompile}
-                  onTriggerCompile={handleTriggerCompile}
-                  sessionId={sessionId}
-                  onProceedToExecution={() => setActiveStep(4)}
-                />
               </div>
-            )}
+
+              <OpenCVCurePreview
+                compileData={compileData}
+                loading={loadingCompile}
+                onTriggerCompile={handleTriggerCompile}
+                sessionId={sessionId}
+                onProceedToExecution={() => setActiveStep(4)}
+              />
+            </div>
           </ErrorBoundary>
         )}
 
         {/* ================= STEP 4: AUTONOMOUS PLAYWRIGHT ================= */}
         {activeStep === 4 && (
           <ErrorBoundary panelName="Self-Healing Playwright Live Console">
-            {!isStep2Passed ? (
-              <div className="bg-red-50 border border-red-300 rounded-xl p-8 text-center space-y-4">
-                <ShieldAlert className="w-12 h-12 text-red-600 mx-auto" />
-                <h3 className="text-xl font-bold text-red-950 font-serif">Playwright Portal Automation Blocked</h3>
-                <p className="text-xs text-red-800 max-w-lg mx-auto font-sans leading-relaxed">
-                  Security Gate Violation: Playwright automation against the state government portal is strictly prohibited while document verification discrepancies exist. Step 2 must achieve 100% verification with 0% rejection risk.
-                </p>
-                <button
-                  onClick={() => setActiveStep(2)}
-                  className="bg-[#162A45] hover:bg-[#1f3a5e] text-white px-5 py-2.5 rounded-lg text-xs font-mono font-semibold"
-                >
-                  ← Return to Step 2 Verification Audit
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <div className="border-b border-[#DFDBD2] pb-3 flex flex-wrap justify-between items-center gap-3">
-                  <div>
-                    <span className="text-[10px] font-mono font-bold text-[#162A45] uppercase tracking-wider block">
-                      Step 4 of 5: Autonomous Portal Filing
-                    </span>
-                    <h3 className="font-serif text-2xl text-[#111625]">Self-Healing Playwright Execution &amp; 502 Chaos Recovery</h3>
-                  </div>
-
-                  {playwrightStatus === 'AWAITING_OTP' && (
-                    <button
-                      onClick={() => setActiveStep(5)}
-                      className="flex items-center space-x-1.5 bg-amber-500 hover:bg-amber-600 text-blue-950 px-4 py-2 rounded-lg text-xs font-mono font-bold shadow-md transition-all animate-bounce"
-                    >
-                      <span>⏸ Advance to Step 5: Citizen Authorization Gate →</span>
-                    </button>
-                  )}
+            <div className="space-y-6">
+              <div className="border-b border-[#DFDBD2] pb-3 flex flex-wrap justify-between items-center gap-3">
+                <div>
+                  <span className="text-[10px] font-mono font-bold text-[#162A45] uppercase tracking-wider block">
+                    Step 4 of 5: Autonomous Portal Filing
+                  </span>
+                  <h3 className="font-serif text-2xl text-[#111625]">Self-Healing Playwright Execution &amp; 502 Chaos Recovery</h3>
                 </div>
 
-                <PlaywrightLiveConsole
-                  sessionId={sessionId}
-                  workflowTarget={workflowTarget}
-                  onExecutionStateChange={handleStatusChange}
-                  onOtpDetected={(otp) => {
-                    // Retain detected OTP without auto-injecting into input
-                  }}
-                  onReceiptGenerated={(ack, shot) => {
-                    setReceiptAck(ack);
-                    if (shot) setReceiptScreenshot(shot);
-                  }}
-                />
-
-                {/* Advance CTA to Step 5 */}
-                <div className="pt-4 border-t border-[#DFDBD2] flex justify-between items-center">
-                  <span className="text-xs font-mono text-[#525866]">
-                    {playwrightStatus === 'AWAITING_OTP'
-                      ? 'Browser agent paused at citizen consent gate. Proceed to Step 5.'
-                      : 'Execute browser agent above to populate the target government portal.'}
-                  </span>
+                {playwrightStatus === 'AWAITING_OTP' && (
                   <button
                     onClick={() => setActiveStep(5)}
-                    className="flex items-center space-x-2 bg-[#162A45] hover:bg-[#1f3a5e] text-white px-5 py-2.5 rounded-lg text-xs font-semibold shadow-sm transition-all"
+                    className="flex items-center space-x-1.5 bg-amber-500 hover:bg-amber-600 text-blue-950 px-4 py-2 rounded-lg text-xs font-mono font-bold shadow-md transition-all animate-bounce"
                   >
-                    <span>Continue to Step 5: Citizen Authorization Gate</span>
-                    <ArrowRight className="w-4 h-4 text-amber-300" />
+                    <span>⏸ Advance to Step 5: Citizen Authorization Gate →</span>
                   </button>
-                </div>
+                )}
               </div>
-            )}
+
+              <PlaywrightLiveConsole
+                sessionId={sessionId}
+                workflowTarget={workflowTarget}
+                onExecutionStateChange={handleStatusChange}
+                onOtpDetected={(otp) => {
+                  // Retain detected OTP without auto-injecting into input
+                }}
+                onReceiptGenerated={(ack, shot) => {
+                  setReceiptAck(ack);
+                  if (shot) setReceiptScreenshot(shot);
+                }}
+              />
+
+              {/* Advance CTA to Step 5 */}
+              <div className="pt-4 border-t border-[#DFDBD2] flex justify-between items-center">
+                <span className="text-xs font-mono text-[#525866]">
+                  {playwrightStatus === 'AWAITING_OTP'
+                    ? 'Browser agent paused at citizen consent gate. Proceed to Step 5.'
+                    : 'Execute browser agent above to populate the target government portal.'}
+                </span>
+                <button
+                  onClick={() => setActiveStep(5)}
+                  className="flex items-center space-x-2 bg-[#162A45] hover:bg-[#1f3a5e] text-white px-5 py-2.5 rounded-lg text-xs font-semibold shadow-sm transition-all"
+                >
+                  <span>Continue to Step 5: Citizen Authorization Gate</span>
+                  <ArrowRight className="w-4 h-4 text-amber-300" />
+                </button>
+              </div>
+            </div>
           </ErrorBoundary>
         )}
 
