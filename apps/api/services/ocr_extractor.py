@@ -1,3 +1,4 @@
+import io
 import os
 import re
 import time
@@ -141,6 +142,20 @@ class FreeMultimodalOCRExtractor:
                         pdf_direct_text = textpage.get_text_range() or ""
                     except Exception:
                         pdf_direct_text = ""
+            except ImportError:
+                # Graceful fallback to pypdf if pypdfium2 is unavailable
+                try:
+                    import pypdf
+                    reader = pypdf.PdfReader(file_path)
+                    if len(reader.pages) > 0:
+                        first_page = reader.pages[0]
+                        pdf_direct_text = first_page.extract_text() or ""
+                        if first_page.images:
+                            first_img = first_page.images[0]
+                            pil_img = Image.open(io.BytesIO(first_img.data)).convert("RGB")
+                            img = np.array(pil_img)[:, :, ::-1]
+                except Exception as pe:
+                    raise DocumentIngestionError(f"Unable to render PDF document ({pe!s}). Please provide an uncorrupted PDF or scan.")
             except Exception as e:
                 raise DocumentIngestionError(f"Unable to render PDF document ({e!s}). Please provide an uncorrupted PDF or scan.")
 
