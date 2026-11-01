@@ -108,11 +108,15 @@ AUTHORITATIVE_POSTAL_DIRECTORY: dict[str, tuple[str, str, str, list[str]]] = {
     # Punjab, Haryana & Chandigarh
     "160017": ("Chandigarh", "Chandigarh", "Chandigarh", ["Sector 17 H.O"]),
     "141001": ("Ludhiana", "Ludhiana", "Punjab", ["Ludhiana H.O"]),
+    "143001": ("Amritsar -I", "Amritsar", "Punjab", ["Amritsar H.O", "Civil Line Amritsar S.O", "Ajnala Road S.O", "Police Colony B.O"]),
     "122001": ("Gurgaon", "Gurugram", "Haryana", ["Gurgaon H.O"]),
     "136119": ("Thanesar", "Kurukshetra", "Haryana", ["Kurukshetra University S.O", "Jyotisar B.O", "Bagthala B.O", "Hathira B.O", "Gurukul B.O", "Dabkheri B.O"]),
     "136118": ("Thanesar", "Kurukshetra", "Haryana", ["Kurukshetra H.O", "Pipli S.O"]),
     "134003": ("Ambala", "Ambala", "Haryana", ["Ambala Cantt H.O", "Ambala City H.O"]),
     "125001": ("Hisar", "Hisar", "Haryana", ["Hisar H.O"]),
+    # Assam
+    "781001": ("Guwahati", "Kamrup Metro", "Assam", ["Guwahati G.P.O", "Panbazar S.O"]),
+    "781003": ("Guwahati", "Kamrup Metro", "Assam", ["Silpukhuri S.O", "Chenikuthi S.O", "Assam Tribune S.O"]),
     "124001": ("Rohtak", "Rohtak", "Haryana", ["Rohtak H.O"]),
     "121001": ("Faridabad", "Faridabad", "Haryana", ["Faridabad NIT H.O"]),
     # Odisha

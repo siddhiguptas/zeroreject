@@ -535,9 +535,9 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                             <span className="truncate">{(uploadedDocs['aadhaar_front'] || uploadedDocs['aadhaar']).filename}</span>
                           </div>
                           <div className="text-[9px] text-emerald-900 border-t border-emerald-200 pt-1 space-y-0.5">
-                            <div>Name: <strong>{(uploadedDocs['aadhaar_front'] || uploadedDocs['aadhaar']).extracted_fields.full_name || 'Detected in Scan'}</strong></div>
-                            <div>DOB: <strong>{(uploadedDocs['aadhaar_front'] || uploadedDocs['aadhaar']).extracted_fields.dob || 'Extracted'}</strong></div>
-                            <div>UID: <strong>{(uploadedDocs['aadhaar_front'] || uploadedDocs['aadhaar']).extracted_fields.id_number || 'Verhoeff Valid'}</strong></div>
+                            <div>Name: <strong>{(uploadedDocs['aadhaar_front'] || uploadedDocs['aadhaar']).extracted_fields.full_name || 'NOT FOUND'}</strong></div>
+                            <div>DOB: <strong>{(uploadedDocs['aadhaar_front'] || uploadedDocs['aadhaar']).extracted_fields.dob || 'NOT FOUND'}</strong></div>
+                            <div>UID: <strong>{(uploadedDocs['aadhaar_front'] || uploadedDocs['aadhaar']).extracted_fields.id_number || 'NOT FOUND'}</strong></div>
                           </div>
                           <span className="text-[8px] text-blue-700 underline block pt-0.5">Click to replace</span>
                         </div>
@@ -586,9 +586,9 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                             <span className="truncate">{uploadedDocs['aadhaar_back'].filename}</span>
                           </div>
                           <div className="text-[9px] text-emerald-900 border-t border-emerald-200 pt-1 space-y-0.5">
-                            <div>C/O: <strong>{uploadedDocs['aadhaar_back'].extracted_fields.father_or_spouse_name || 'Guardian Extracted'}</strong></div>
-                            <div>PIN: <strong>{uploadedDocs['aadhaar_back'].extracted_fields.pincode || 'Extracted'}</strong></div>
-                            <div className="truncate">Addr: <strong>{uploadedDocs['aadhaar_back'].extracted_fields.address?.slice(0, 20) || 'Verified'}...</strong></div>
+                            <div>C/O: <strong>{uploadedDocs['aadhaar_back'].extracted_fields.father_or_spouse_name || 'NOT FOUND'}</strong></div>
+                            <div>PIN: <strong>{uploadedDocs['aadhaar_back'].extracted_fields.pincode || 'NOT FOUND'}</strong></div>
+                            <div className="truncate">Addr: <strong>{uploadedDocs['aadhaar_back'].extracted_fields.address ? `${uploadedDocs['aadhaar_back'].extracted_fields.address.slice(0, 30)}...` : 'NOT FOUND'}</strong></div>
                           </div>
                           <span className="text-[8px] text-blue-700 underline block pt-0.5">Click to replace</span>
                         </div>

@@ -107,6 +107,56 @@ class FreeMultimodalOCRExtractor:
 
         return extracted_data
 
+    def _auto_orient_image(self, img: np.ndarray) -> np.ndarray:
+        """
+        Detects document orientation (portrait photos of landscape ID cards or upside down scans)
+        using fast multi-angle heuristic scoring against civic identity keywords & patterns.
+        """
+        h, w = img.shape[:2]
+        rotations = [
+            (cv2.ROTATE_90_COUNTERCLOCKWISE, "270deg"),
+            (cv2.ROTATE_90_CLOCKWISE, "90deg"),
+            (None, "0deg"),
+            (cv2.ROTATE_180, "180deg")
+        ] if h > w else [
+            (None, "0deg"),
+            (cv2.ROTATE_90_COUNTERCLOCKWISE, "270deg"),
+            (cv2.ROTATE_90_CLOCKWISE, "90deg"),
+            (cv2.ROTATE_180, "180deg")
+        ]
+
+        CIVIC_ANCHORS = {
+            'AADHAAR', 'UIDAI', 'GOVERNMENT', 'INDIA', 'BHARAT', 'INCOME', 'TAX', 'PERMANENT',
+            'ACCOUNT', 'FATHER', 'NAME', 'DOB', 'MALE', 'FEMALE', 'ADDRESS', 'UNIQUE',
+            'IDENTIFICATION', 'AUTHORITY', 'DEPARTMENT', 'CERTIFICATE', 'SECONDARY', 'BOARD',
+            'SCHOOL', 'ROLL', 'PASS', 'STATE', 'ASSAM', 'PUNJAB', 'DELHI', 'PRADESH',
+            'MAHARASHTRA', 'BENGAL', 'GUJARAT', 'HARYANA', 'BIHAR', 'C/O', 'S/O', 'D/O', 'W/O', 'KAMRUP'
+        }
+
+        best_score = -1
+        best_img = img
+
+        for rot_code, angle in rotations:
+            cand = img if rot_code is None else cv2.rotate(img, rot_code)
+            ch, cw = cand.shape[:2]
+            scale = 800.0 / max(ch, cw)
+            thumb = cv2.resize(cand, (int(cw * scale), int(ch * scale)))
+            gray = cv2.cvtColor(thumb, cv2.COLOR_BGR2GRAY)
+            txt = pytesseract.image_to_string(gray, config='--oem 3 --psm 3')
+            up = txt.upper()
+            sc = sum(10 for kw in CIVIC_ANCHORS if kw in up)
+            if re.search(r'\b[1-9][0-9]{5}\b', txt): sc += 20
+            if re.search(r'\b[0-9]{4}\s+[0-9]{4}\s+[0-9]{4}\b', txt): sc += 25
+            if re.search(r'\b[A-Z]{5}[0-9]{4}[A-Z]\b', txt): sc += 25
+
+            if sc > best_score:
+                best_score = sc
+                best_img = cand
+                if sc >= 40:
+                    break
+
+        return best_img
+
     def _preprocess_and_segment_rois(self, file_path: str) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
         """
         Stage 1: OpenCV Image Enhancement & Region-of-Interest (ROI) Segmentation.
@@ -171,6 +221,8 @@ class FreeMultimodalOCRExtractor:
         if img is None or img.size == 0:
             raise DocumentIngestionError("Decoded document contains no pixel data (0x0).")
 
+        # Auto-orient image (handles mobile portrait photos of landscape cards or upside down scans)
+        img = self._auto_orient_image(img)
         orig_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
         h, w = img.shape[:2]
@@ -227,10 +279,16 @@ class FreeMultimodalOCRExtractor:
         custom_sparse = r'--oem 3 --psm 11'
         custom_auto = r'--oem 3 --psm 3'
 
+        txt_auto = ""
         txt_gray_flow = ""
         txt_sparse = ""
         txt_left_flow = ""
         txt_orig_left = ""
+
+        try:
+            txt_auto = pytesseract.image_to_string(gray_img, config=custom_auto)
+        except Exception:
+            pass
 
         try:
             txt_gray_flow = pytesseract.image_to_string(gray_img, config=custom_flow)
@@ -258,7 +316,7 @@ class FreeMultimodalOCRExtractor:
         except Exception:
             pass
 
-        combined_text = f"{txt_gray_flow}\n{txt_orig_left}\n{txt_left_flow}\n{txt_sparse}"
+        combined_text = f"{txt_auto}\n{txt_gray_flow}\n{txt_orig_left}\n{txt_left_flow}\n{txt_sparse}"
         engine = "Pytesseract_MultiZone_Ensemble"
 
         # Multi-Angle Orientation Retry if scan was upside down or sideways
@@ -298,7 +356,7 @@ class FreeMultimodalOCRExtractor:
         lines = [line.strip() for line in text.split("\n") if line.strip()]
 
         # 1. Pincode regex (priority on State/Pradesh/PIN anchor, then general 6 digits)
-        pin_anchor_match = re.search(r'(?:Pradesh|State|PIN|Pin|Pincode|Code)[^\d]*([1-9][0-9]{5})\b', text, re.IGNORECASE)
+        pin_anchor_match = re.search(r'(?:Pradesh|State|PIN|Pin|Pincode|Code|Assam|Punjab|Bengal|Delhi|Bihar|Gujarat|Maharashtra|Haryana)[^\d]*([1-9][0-9]{5})\b', text, re.IGNORECASE)
         if pin_anchor_match:
             data.pincode = pin_anchor_match.group(1)
         else:
@@ -387,16 +445,16 @@ class FreeMultimodalOCRExtractor:
                     data.district = matched_name
 
             if not data.district or len(data.district) <= 3:
-                # Common pattern in Aadhaar address: "Taluka/Town, District, State - Pincode" e.g. "Rudrapur, Deoria, Uttar Pradesh - 274204"
-                dist_pattern = re.search(r'([A-Za-z]{3,20})[,\s.]*([A-Za-z]{3,20})?[,\s.]+(?:Uttar\s*Pradesh|UP|Delhi|Haryana|Bihar|Maharashtra|Karnataka|Rajasthan)[,\s\-]+(?:[1-9][0-9]{5})?', text, re.IGNORECASE)
+                # Common pattern in Aadhaar address: "Taluka/Town, District, State - Pincode" e.g. "Kamrup Metro, Assam, 781003"
+                dist_pattern = re.search(
+                    r'([A-Za-z\s]{3,25})[,\s\-]+(Assam|Punjab|Uttar\s*Pradesh|UP|Delhi|Haryana|Bihar|West\s*Bengal|Maharashtra|Karnataka|Tamil\s*Nadu|Rajasthan|Gujarat|Kerala|Madhya\s*Pradesh|Odisha|Telangana|Andhra\s*Pradesh)[,\s\-]+(?:[1-9][0-9]{5})?',
+                    text,
+                    re.IGNORECASE
+                )
                 if dist_pattern:
-                    t_cand = dist_pattern.group(1).strip()
-                    d_cand = (dist_pattern.group(2) or "").strip()
-                    if d_cand and not any(ign in d_cand.upper() for ign in ["PRADESH", "UTTAR", "STATE", "INDIA", "HELP", "UIDAI"]) and len(d_cand) > 3:
-                        data.district = d_cand.title()
-                        data.taluka = t_cand.title()
-                    elif not any(ign in t_cand.upper() for ign in ["PRADESH", "UTTAR", "STATE", "INDIA", "HELP", "UIDAI"]) and len(t_cand) > 3:
-                        data.district = t_cand.title()
+                    cand_dist = re.sub(r'[^a-zA-Z\s]', '', dist_pattern.group(1)).strip()
+                    if cand_dist and not any(ign in cand_dist.upper() for ign in ["ROAD", "STREET", "NAGAR", "COLONY", "HOUSE", "LANE", "VILL", "POST", "PRADESH", "STATE", "INDIA", "CITY"]) and len(cand_dist) >= 3:
+                        data.district = cand_dist.title()
                 elif matched_name:
                     data.district = matched_name
 
