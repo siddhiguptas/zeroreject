@@ -239,13 +239,15 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
           <div className="flex items-center space-x-3">
             <button
               onClick={handleStartExecution}
-              disabled={isRunning || !sessionId}
+              disabled={isRunning || !sessionId || status === 'AWAITING_OTP'}
               className="flex items-center space-x-2 bg-[#162A45] hover:bg-[#0E1A2B] text-white px-6 py-2.5 rounded-lg text-xs font-mono font-semibold shadow-sm transition-all disabled:opacity-50"
             >
               <Play className="w-3.5 h-3.5 fill-white" />
               <span>
                 {isRunning
                   ? 'Autonomous Agent Navigating...'
+                  : status === 'AWAITING_OTP'
+                  ? '⏸ Awaiting Citizen OTP Authorization'
                   : status === 'VERIFIED'
                   ? 'Re-Run Playwright Filing'
                   : 'Start Autonomous Playwright Filing'}

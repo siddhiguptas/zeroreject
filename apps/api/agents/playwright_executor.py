@@ -258,10 +258,22 @@ class PlaywrightBureaucracyAgent:
                 step3_success = False
 
                 while retry_count < max_retries and not step3_success:
-                    await page.click("#btn-submit-step3")
-                    await page.wait_for_timeout(1200)
+                    # Ensure files are attached
+                    await page.set_input_files("#portrait_file", port_path)
+                    await page.set_input_files("#signature_file", sig_path)
+                    await page.set_input_files("#affidavit_file", aff_path)
 
-                    # Check page content for 502 Bad Gateway
+                    await page.click("#btn-submit-step3")
+
+                    # Wait for navigation to complete or either Step 4 OTP or 502 Bad Gateway
+                    try:
+                        await page.wait_for_selector(
+                            "#step4-otp-form, #demo-otp-val, h1:has-text('502 Bad Gateway'), p:has-text('ERR_REV_UPSTREAM_TIMEOUT')",
+                            timeout=12000
+                        )
+                    except Exception:
+                        pass
+
                     page_content = await page.content()
                     if "502 Bad Gateway" in page_content or "ERR_REV_UPSTREAM_TIMEOUT" in page_content:
                         retry_count += 1
@@ -280,8 +292,19 @@ class PlaywrightBureaucracyAgent:
                         await asyncio.sleep(0.4 * (2 ** retry_count))
 
                         # Reload / navigate back to step 3 and re-apply uploads
-                        await page.go_back()
-                        await page.wait_for_selector("#step3-form", timeout=8000)
+                        try:
+                            await page.go_back()
+                            await page.wait_for_selector("#step3-form", timeout=6000)
+                        except Exception:
+                            # If history back landed on step 2 or direct get, proceed to step 3
+                            if await page.query_selector("#btn-next-step2"):
+                                await page.click("#btn-next-step2")
+                                await page.wait_for_selector("#step3-form", timeout=8000)
+                            else:
+                                base_target = target_url.split("?")[0].rstrip("/")
+                                q_param = target_url.split("?")[1] if "?" in target_url else "portal=e_district_income"
+                                await page.goto(f"{base_target}/step3?{q_param}", timeout=8000)
+
                         await page.set_input_files("#portrait_file", port_path)
                         await page.set_input_files("#signature_file", sig_path)
                         await page.set_input_files("#affidavit_file", aff_path)
@@ -294,8 +317,18 @@ class PlaywrightBureaucracyAgent:
                             "message": f"Checkpoint restored successfully! Re-submitting cured assets (Attempt {retry_count + 1})...",
                             "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
                         })
-                    else:
+                    elif "step4-otp-form" in page_content or "demo-otp-val" in page_content:
                         step3_success = True
+                    else:
+                        # Fallback: wait up to 4s if page is still completing navigation
+                        try:
+                            await page.wait_for_selector("#step4-otp-form, #demo-otp-val", timeout=4000)
+                            step3_success = True
+                        except Exception:
+                            if await page.query_selector("#btn-submit-step3"):
+                                retry_count += 1
+                            else:
+                                step3_success = True
 
                 # Wait for Step 4 OTP Gate
                 await page.wait_for_selector("#step4-otp-form", timeout=12000)
@@ -343,7 +376,12 @@ class PlaywrightBureaucracyAgent:
                 err_msg = f"{type(e).__name__}: {e!s}".strip()
                 if not err_msg or err_msg.endswith(":"):
                     err_msg = repr(e)
-                shot_err = await self._capture_screenshot(page)
+                shot_err = None
+                try:
+                    if page:
+                        shot_err = await self._capture_screenshot(page)
+                except Exception:
+                    pass
                 emit({
                     "step_index": 99,
                     "step_name": "EXECUTION_EXCEPTION",

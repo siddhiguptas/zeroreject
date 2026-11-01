@@ -293,6 +293,117 @@ async def post_step1(
     return HTMLResponse(content=render_page("Step 2 - Address Details", body, step=2, portal_key=resolved_portal))
 
 
+@app.get("/step2", response_class=HTMLResponse)
+async def get_step2(request: Request, gov_sess_id: str | None = None, portal_key: str | None = None):
+    resolved_portal = resolve_portal_key(request, raw_key=portal_key)
+    sid = gov_sess_id or (list(portal_sessions.keys())[-1] if portal_sessions else "sess_default")
+    sess = portal_sessions.get(sid, {})
+    address_line = sess.get("address_line", "Vill. Bakewar, Bharthana Road")
+    pincode = sess.get("pincode", "206124")
+    district = sess.get("district", "Etawah")
+    state = sess.get("state", "Uttar Pradesh")
+
+    body = f"""
+    <h2 class="text-xl font-bold text-gray-800 mb-2">Step 2: Permanent Address & Jurisdiction</h2>
+    <p class="text-sm text-gray-600 mb-6">Enter official domicile address hierarchy. Pincode and district will be cross-referenced with LGD directory.</p>
+
+    <form id="step2-form" action="/step2" method="POST" class="space-y-6">
+        <input type="hidden" name="gov_sess_id" value="{sid}">
+        <input type="hidden" name="portal_key" value="{resolved_portal}">
+
+        <div>
+            <label for="address_line" class="block text-sm font-semibold text-gray-700 mb-1">Full Residential Address *</label>
+            <input type="text" id="address_line" name="address_line" required
+                   value="{address_line}"
+                   class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-600 focus:outline-none">
+        </div>
+
+        <div class="grid grid-cols-3 gap-6">
+            <div>
+                <label for="pincode" class="block text-sm font-semibold text-gray-700 mb-1">PIN Code (6-Digit) *</label>
+                <input type="text" id="pincode" name="pincode" required pattern="[1-9][0-9]{{5}}"
+                       value="{pincode}"
+                       class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-600 focus:outline-none">
+            </div>
+            <div>
+                <label for="district" class="block text-sm font-semibold text-gray-700 mb-1">District *</label>
+                <input type="text" id="district" name="district" required
+                       value="{district}"
+                       class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-600 focus:outline-none">
+            </div>
+            <div>
+                <label for="state" class="block text-sm font-semibold text-gray-700 mb-1">State *</label>
+                <input type="text" id="state" name="state" required
+                       value="{state}"
+                       class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-600 focus:outline-none">
+            </div>
+        </div>
+
+        <div class="pt-4 flex justify-between">
+            <a href="/step1" class="text-gray-600 hover:text-gray-900 font-medium py-2">← Back</a>
+            <button type="submit" id="btn-next-step2" class="bg-blue-800 hover:bg-blue-900 text-white font-semibold px-6 py-2.5 rounded shadow">
+                Save & Proceed to Documents (Step 3) →
+            </button>
+        </div>
+    </form>
+    """
+    return HTMLResponse(content=render_page("Step 2 - Address Details", body, step=2, portal_key=resolved_portal))
+
+
+@app.get("/step3", response_class=HTMLResponse)
+async def get_step3(request: Request, gov_sess_id: str | None = None, portal_key: str | None = None):
+    resolved_portal = resolve_portal_key(request, raw_key=portal_key)
+    sid = gov_sess_id or (list(portal_sessions.keys())[-1] if portal_sessions else "sess_default")
+    profile = PORTAL_PROFILES.get(resolved_portal, PORTAL_PROFILES["e_district_income"])
+
+    body = f"""
+    <h2 class="text-xl font-bold text-gray-800 mb-2">Step 3: Biometric & Statutory Document Uploads</h2>
+    <div class="bg-blue-50 border-l-4 border-blue-800 p-4 mb-6 text-xs text-blue-950 space-y-1">
+        <p class="font-bold text-sm">STRICT PORTAL FILE VALIDATION CONSTRAINTS (Rule 18-A):</p>
+        <p>• <strong>Photograph</strong>: JPEG format, exactly 200x230 px, between 10 KB and 50 KB.</p>
+        <p>• <strong>Applicant Signature</strong>: Grayscale, exactly 140x60 px, strictly <strong>under 20 KB</strong>.</p>
+        <p>• <strong>Supporting Document</strong>: {profile['doc3_label']}</p>
+    </div>
+
+    <form id="step3-form" action="/step3" method="POST" enctype="multipart/form-data" class="space-y-6">
+        <input type="hidden" name="gov_sess_id" value="{sid}">
+        <input type="hidden" name="portal_key" value="{resolved_portal}">
+
+        <div>
+            <label for="portrait_file" class="block text-sm font-semibold text-gray-700 mb-1">
+                Passport Size Photograph (200x230 px, 10–50 KB) *
+            </label>
+            <input type="file" id="portrait_file" name="portrait_file" required accept=".jpg,.jpeg"
+                   class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+        </div>
+
+        <div>
+            <label for="signature_file" class="block text-sm font-semibold text-gray-700 mb-1">
+                Applicant Signature (140x60 px, strictly under 20 KB) *
+            </label>
+            <input type="file" id="signature_file" name="signature_file" required accept=".jpg,.jpeg,.png"
+                   class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+        </div>
+
+        <div>
+            <label for="affidavit_file" class="block text-sm font-semibold text-gray-700 mb-1">
+                {profile['doc3_label']}
+            </label>
+            <input type="file" id="affidavit_file" name="affidavit_file" required accept=".pdf"
+                   class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+        </div>
+
+        <div class="pt-4 flex justify-between">
+            <button type="button" onclick="history.back()" class="text-gray-600 hover:text-gray-900 font-medium py-2">← Back</button>
+            <button type="submit" id="btn-submit-step3" class="bg-blue-800 hover:bg-blue-900 text-white font-semibold px-6 py-2.5 rounded shadow">
+                Upload & Verify Assets (Step 3) →
+            </button>
+        </div>
+    </form>
+    """
+    return HTMLResponse(content=render_page("Step 3 - Biometric Uploads", body, step=3, portal_key=resolved_portal))
+
+
 @app.post("/step2", response_class=HTMLResponse)
 async def post_step2(
     gov_sess_id: str = Form(...),
