@@ -73,16 +73,22 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
           setCurrentScreenshot(event.screenshot_base64);
         }
 
+        const isAwaitingOtp =
+          event.status === 'AWAITING_OTP' ||
+          event.step_name === 'OTP_REQUIRED' ||
+          event.step_name === 'HUMAN_IN_THE_LOOP_OTP_GATE';
+
         if (event.status === 'RETRYING') {
           setStatus('HEALING');
           onExecutionStateChange?.('HEALING');
-        } else if (event.status === 'AWAITING_OTP') {
+        } else if (isAwaitingOtp) {
           setStatus('AWAITING_OTP');
           onExecutionStateChange?.('AWAITING_OTP');
           setIsRunning(false);
           const dynamicOtp = (event as any).otp_code;
           if (dynamicOtp) {
             setDetectedOtp(dynamicOtp);
+            setOtpCode(dynamicOtp);
             onOtpDetected?.(dynamicOtp);
           }
         } else if (event.status === 'SUBMITTED') {
@@ -421,8 +427,20 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
                 <span>Human-in-the-Loop Citizen Authorization Gate</span>
               </div>
 
-              <div className="bg-[#0F172A] border border-amber-500/40 p-2.5 rounded text-[11px] font-mono text-amber-200">
-                <span>Target Portal challenge active. Check the visible Chromium browser window on your screen and input the 6-digit OTP below:</span>
+              <div className="bg-[#0F172A] border border-amber-500/40 p-2.5 rounded text-[11px] font-mono text-amber-200 space-y-1.5">
+                <div>Target Portal challenge active. Input the 6-digit verification code below to authorize Playwright to finalize filing:</div>
+                {detectedOtp && (
+                  <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded text-[11px] text-amber-300">
+                    <span>Portal Dispatched OTP: <strong className="font-mono text-white text-xs tracking-wider">{detectedOtp}</strong></span>
+                    <button
+                      type="button"
+                      onClick={() => setOtpCode(detectedOtp)}
+                      className="text-[10px] uppercase font-bold tracking-wider text-amber-400 hover:text-white underline cursor-pointer"
+                    >
+                      Use Dispatched OTP
+                    </button>
+                  </div>
+                )}
               </div>
 
               {authError && (

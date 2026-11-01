@@ -965,7 +965,7 @@ export const StudioWorkspace: React.FC<StudioWorkspaceProps> = ({ onPlaywrightSt
                 workflowTarget={workflowTarget}
                 onExecutionStateChange={handleStatusChange}
                 onOtpDetected={(otp) => {
-                  // Retain detected OTP without auto-injecting into input
+                  setOtpCode(otp);
                 }}
                 onReceiptGenerated={(ack, shot) => {
                   setReceiptAck(ack);
