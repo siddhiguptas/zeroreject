@@ -80,3 +80,4 @@ $SUDO systemctl restart zeroreject-api zeroreject-gov zeroreject-web
 
 echo "==> ZeroReject systemd services installed and enabled on boot!"
 echo "    Check status with: sudo systemctl status zeroreject-api zeroreject-web"
+

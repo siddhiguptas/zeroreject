@@ -246,3 +246,4 @@ else
     ps aux | grep -E "uvicorn|next-server" | grep -v grep || true
     echo -e "${YELLOW}Tip: Check storage/logs/api.log, storage/logs/gov.log, storage/logs/web.log for output.${NC}"
 fi
+

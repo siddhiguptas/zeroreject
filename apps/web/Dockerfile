@@ -28,3 +28,4 @@ COPY --from=builder /app/node_modules ./node_modules
 EXPOSE 3000
 
 CMD ["npm", "run", "start", "--", "-p", "3000", "-H", "0.0.0.0"]
+

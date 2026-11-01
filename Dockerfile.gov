@@ -13,3 +13,4 @@ COPY apps/gov_portal_target /app/apps/gov_portal_target
 EXPOSE 8090
 
 CMD ["python", "-m", "uvicorn", "apps.gov_portal_target.app:app", "--host", "0.0.0.0", "--port", "8090"]
+
