@@ -540,7 +540,7 @@ class DeterministicPhoneticReconciler:
 
         risk = min(100.0, max(0.0, risk))
         
-        if risk <= 10.0:
+        if risk == 0.0 and len(discrepancies) == 0:
             status = "PASS"
         elif risk <= 40.0:
             status = "CURABLE_DISCREPANCY"

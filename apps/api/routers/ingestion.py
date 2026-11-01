@@ -273,11 +273,13 @@ async def execute_4gate_reconciliation(
     3. Gate 3: Statutory Rules & Revenue Expiry Verification (BM25 RAG).
     4. Gate 4: Live India Post LGD Postal & Tehsil Verification (api.postalpincode.in).
     """
-    aadhaar_front_doc = extracted_docs.get("aadhaar_front") or extracted_docs.get("aadhaar")
+    candidate_primary = [d for d in [extracted_docs.get("aadhaar_front"), extracted_docs.get("aadhaar")] if d is not None]
+    aadhaar_front_doc = max(candidate_primary, key=lambda x: x.id or 0) if candidate_primary else None
     aadhaar_back_doc = extracted_docs.get("aadhaar_back")
     pan_doc = extracted_docs.get("pan")
     marksheet_doc = extracted_docs.get("marksheet")
-    secondary_doc = pan_doc or marksheet_doc
+    candidate_secondary = [d for d in [pan_doc, marksheet_doc] if d is not None]
+    secondary_doc = max(candidate_secondary, key=lambda x: x.id or 0) if candidate_secondary else None
 
     # Name extraction: resolve Primary ID vs Secondary ID (Pure extraction / Zero mock fallbacks)
     name_a = (

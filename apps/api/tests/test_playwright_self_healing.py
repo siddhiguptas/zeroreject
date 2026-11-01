@@ -95,10 +95,23 @@ async def test_playwright_survives_502_chaos(gov_portal_server):
     assert "SELF_HEALING_RETRY" in event_names
     assert "HUMAN_IN_THE_LOOP_OTP_GATE" in event_names
 
-    # Verify final OTP submission
+    # Verify genuine OTP authorization flow
+    last_otp_event = next(e for e in reversed(events_received) if e.get("status") == "AWAITING_OTP")
+    genuine_otp = last_otp_event.get("otp_code")
+    assert genuine_otp and len(genuine_otp) == 6
+
+    # 1. Negative test: Prove that entering the wrong OTP is strictly rejected by the portal
+    invalid_res = await playwright_agent.submit_otp_and_finalize(
+        session_id=session_id,
+        otp_code="000000"
+    )
+    assert invalid_res["status"] == "FAILED"
+    assert "rejected" in invalid_res["error"].lower() or "mismatch" in invalid_res["error"].lower()
+
+    # 2. Positive test: Authorize with the genuine dispatched OTP
     otp_res = await playwright_agent.submit_otp_and_finalize(
         session_id=session_id,
-        otp_code="719340"
+        otp_code=genuine_otp
     )
     assert otp_res["status"] == "SUBMITTED"
     assert "UP-EDIST-2026" in otp_res["acknowledgement_number"]

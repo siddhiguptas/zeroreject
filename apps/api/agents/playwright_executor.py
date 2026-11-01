@@ -55,7 +55,8 @@ class PlaywrightBureaucracyAgent:
         target_url: str,
         applicant_data: dict[str, Any],
         asset_paths: dict[str, str], # portrait, signature, affidavit
-        chaos_enabled: bool = False
+        chaos_enabled: bool = False,
+        headless: bool | None = None
     ) -> AsyncGenerator[dict[str, Any], None]:
         main_loop = asyncio.get_running_loop()
         event_queue: asyncio.Queue = asyncio.Queue()
@@ -73,17 +74,31 @@ class PlaywrightBureaucracyAgent:
             emit({
                 "step_index": 0,
                 "step_name": "AGENT_INITIALIZATION",
+                "display_name": "Agent Initializing",
                 "status": "RUNNING",
-                "message": f"Initializing Playwright async browser context for session {session_id[:8]}...",
+                "message": f"Initializing Playwright async engine for session {session_id[:8]}...",
                 "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             })
+
+            effective_headless = headless if headless is not None else settings.PLAYWRIGHT_HEADLESS
+            mode_desc = "headless background mode" if effective_headless else "visible browser window"
 
             try:
                 playwright_instance = await async_playwright().start()
                 browser = await playwright_instance.chromium.launch(
-                    headless=settings.PLAYWRIGHT_HEADLESS,
-                    slow_mo=settings.PLAYWRIGHT_SLOW_MO_MS
+                    headless=effective_headless,
+                    slow_mo=settings.PLAYWRIGHT_SLOW_MO_MS,
+                    args=["--start-maximized"] if not effective_headless else []
                 )
+
+                emit({
+                    "step_index": 0,
+                    "step_name": "BROWSER_LAUNCHED",
+                    "display_name": "Browser Launched",
+                    "status": "RUNNING",
+                    "message": f"Browser Launched: Chromium active in {mode_desc} (slow_mo={settings.PLAYWRIGHT_SLOW_MO_MS}ms)...",
+                    "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                })
                 context: BrowserContext = await browser.new_context(
                     viewport={"width": 1280, "height": 800},
                     user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) ZeroReject-AutonomousAgent/2.0"
@@ -103,9 +118,9 @@ class PlaywrightBureaucracyAgent:
                 # STEP 1: Navigate to Target Portal & Fill Personal Details
                 emit({
                     "step_index": 1,
-                    "step_name": "NAVIGATE_TARGET_PORTAL",
+                    "step_name": "PORTAL_OPENED",
                     "status": "RUNNING",
-                    "message": f"Connecting to Target Government Portal: {target_url}",
+                    "message": f"Portal Opened: Connected to Government Portal at {target_url}",
                     "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
                 })
 
@@ -114,9 +129,9 @@ class PlaywrightBureaucracyAgent:
 
                 emit({
                     "step_index": 1,
-                    "step_name": "DOM_ACCESSIBILITY_MAPPING",
+                    "step_name": "FORM_FILLING",
                     "status": "RUNNING",
-                    "message": "Inspecting DOM Accessibility Tree & Mapping Canonical Demographic Fields...",
+                    "message": "Form Filling: Inspecting DOM accessibility tree and mapping canonical demographic fields...",
                     "screenshot_base64": shot1,
                     "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
                 })
@@ -183,9 +198,9 @@ class PlaywrightBureaucracyAgent:
                 # STEP 3: Upload Auto-Cured Biometric Assets with Self-Healing Chaos Loop
                 emit({
                     "step_index": 3,
-                    "step_name": "STEP3_ASSET_UPLOAD",
+                    "step_name": "BIOMETRIC_ASSETS_SUBMITTED",
                     "status": "RUNNING",
-                    "message": "Attaching OpenCV compiled portrait (200x230), signature (<20KB), and statutory affidavit PDF...",
+                    "message": "Biometric Assets Submitted: Attaching OpenCV compiled portrait (200x230), signature (<20KB), and statutory affidavit PDF...",
                     "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
                 })
 
@@ -283,9 +298,20 @@ class PlaywrightBureaucracyAgent:
                 # STEP 4: Human-in-the-Loop OTP Authorization Gate (PAUSE)
                 emit({
                     "step_index": 4,
+                    "step_name": "OTP_REQUIRED",
+                    "display_name": "OTP Required",
+                    "status": "RUNNING",
+                    "message": "OTP Required: Target government portal challenged for citizen verification.",
+                    "screenshot_base64": shot4_otp,
+                    "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                })
+
+                emit({
+                    "step_index": 4,
                     "step_name": "HUMAN_IN_THE_LOOP_OTP_GATE",
+                    "display_name": "Awaiting User Authorization",
                     "status": "AWAITING_OTP",
-                    "message": f"HALTED AT CITIZEN CONSENT GATE: Per UIDAI & IT Act, citizen must authorize submission. Generated sandbox OTP: {otp_val}. Waiting for citizen verification...",
+                    "message": "Awaiting User Authorization: Citizen must input 6-digit verification code to authorize final submission...",
                     "screenshot_base64": shot4_otp,
                     "otp_code": otp_val,
                     "error_recovery_count": retry_count,
@@ -366,10 +392,9 @@ class PlaywrightBureaucracyAgent:
         ctx_data = self.active_contexts.get(session_id)
         if not ctx_data or "page" not in ctx_data or "worker_loop" not in ctx_data:
             return {
-                "success": True,
-                "acknowledgement_number": f"UP-EDIST-2026-F{int(time.time()) % 1000000}",
-                "status": "SUBMITTED",
-                "message": "Filing successfully authorized and recorded."
+                "success": False,
+                "status": "FAILED",
+                "error": "No active browser session found awaiting OTP. Please run the Playwright automation in Step 4 first."
             }
 
         worker_loop = ctx_data["worker_loop"]
@@ -377,15 +402,55 @@ class PlaywrightBureaucracyAgent:
         async def _submit():
             page: Page = ctx_data["page"]
             browser: Browser = ctx_data["browser"]
+            is_successful = False
             try:
-                await page.fill("#citizen_otp", otp_code)
-                await page.check("#citizen_consent")
-                await page.click("#btn-authorize-final")
-                await page.wait_for_selector("#receipt-container", timeout=10000)
+                # Bring window to front in visible mode
+                try:
+                    await page.bring_to_front()
+                except Exception:
+                    pass
 
+                # Ensure OTP input field is available in visible DOM
+                await page.wait_for_selector("#citizen_otp", timeout=8000)
+
+                # Clear and type OTP with keystroke delay for visual transparency
+                await page.click("#citizen_otp")
+                await page.fill("#citizen_otp", "")
+                await page.type("#citizen_otp", otp_code.strip(), delay=100)
+                await page.check("#citizen_consent")
+                await asyncio.sleep(0.3)
+                await page.click("#btn-authorize-final")
+
+                # Wait for portal response: receipt or error
+                try:
+                    await page.wait_for_selector("#receipt-container, #otp-error", timeout=12000)
+                except Exception:
+                    shot_err = await self._capture_screenshot(page)
+                    return {
+                        "success": False,
+                        "status": "FAILED",
+                        "screenshot_base64": shot_err,
+                        "error": "Government portal timed out waiting for authorization confirmation."
+                    }
+
+                # Check if portal rendered an explicit OTP rejection
+                err_elem = await page.query_selector("#otp-error")
+                if err_elem:
+                    err_msg = (await err_elem.inner_text()).strip()
+                    shot_err = await self._capture_screenshot(page)
+                    # Keep browser open so citizen can re-type correct OTP without losing form state
+                    return {
+                        "success": False,
+                        "status": "FAILED",
+                        "screenshot_base64": shot_err,
+                        "error": err_msg or f"Government portal rejected OTP '{otp_code}': Authentication code mismatch."
+                    }
+
+                # Confirmed Receipt Container
                 ack_elem = await page.query_selector("#ack-number")
-                ack_no = await ack_elem.inner_text() if ack_elem else f"UP-EDIST-2026-{int(time.time()) % 1000000}"
+                ack_no = (await ack_elem.inner_text()).strip() if ack_elem else f"UP-EDIST-2026-{int(time.time()) % 1000000}"
                 shot_receipt = await self._capture_screenshot(page)
+                is_successful = True
 
                 return {
                     "success": True,
@@ -395,18 +460,20 @@ class PlaywrightBureaucracyAgent:
                     "message": "Official submission stamped and recorded by State Government Portal."
                 }
             finally:
-                try:
-                    await browser.close()
-                except Exception:
-                    pass
-                pw = ctx_data.get("playwright")
-                if pw:
+                # If transaction successfully filed and stamped, cleanly close browser context
+                if is_successful:
                     try:
-                        await pw.stop()
+                        await browser.close()
                     except Exception:
                         pass
-                if session_id in self.active_contexts:
-                    del self.active_contexts[session_id]
+                    pw = ctx_data.get("playwright")
+                    if pw:
+                        try:
+                            await pw.stop()
+                        except Exception:
+                            pass
+                    if session_id in self.active_contexts:
+                        del self.active_contexts[session_id]
 
         fut = asyncio.run_coroutine_threadsafe(_submit(), worker_loop)
         return await asyncio.wrap_future(fut)

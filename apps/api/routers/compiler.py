@@ -159,6 +159,21 @@ async def compile_portal_assets(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
+    # STRICT STEP 2 WORKFLOW GATE ENFORCEMENT
+    recon_res = await db.execute(select(ReconciliationRecord).where(ReconciliationRecord.session_id == req.session_id))
+    recon = recon_res.scalar_one_or_none()
+    if not recon:
+        raise HTTPException(
+            status_code=403,
+            detail="Security Gate Violation: Step 2 verification must be executed and achieve 100% pass (0% rejection risk) before biometric asset curing can proceed."
+        )
+    if (recon.rejection_risk_score is not None and recon.rejection_risk_score > 0) or bool(recon.discrepancy_flags):
+        risk_val = recon.rejection_risk_score if recon.rejection_risk_score is not None else 100.0
+        raise HTTPException(
+            status_code=403,
+            detail=f"Security Gate Blocked: Document verification failed with {risk_val}% rejection risk. Step 2 requires 100% verification (0% rejection risk) before advancing to biometric curing."
+        )
+
     # Ingest source assets from user upload if present, or fallback to real sample docs
     docs_res = await db.execute(select(ExtractedDocument).where(ExtractedDocument.session_id == req.session_id))
     docs = docs_res.scalars().all()

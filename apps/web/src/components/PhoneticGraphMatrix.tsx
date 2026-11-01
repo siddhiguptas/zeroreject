@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ShieldCheck, AlertCircle, MapPin, CheckCircle2, BookOpen, Hash, Volume2, ArrowRight, QrCode, Scale, FileCheck } from 'lucide-react';
+import { ShieldCheck, AlertCircle, MapPin, CheckCircle2, BookOpen, Hash, Volume2, ArrowRight, QrCode, Scale, FileCheck, Lock, ShieldAlert } from 'lucide-react';
 import { ReconciliationResponse } from '@/types';
 import { askVoiceCopilot } from '@/lib/api-client';
 
@@ -9,12 +9,14 @@ interface PhoneticGraphMatrixProps {
   reconciliation: ReconciliationResponse | null;
   loading: boolean;
   onProceedToCure?: () => void;
+  onReturnToStep1?: () => void;
 }
 
 export const PhoneticGraphMatrix: React.FC<PhoneticGraphMatrixProps> = ({
   reconciliation,
   loading,
   onProceedToCure,
+  onReturnToStep1,
 }) => {
   const [playingLang, setPlayingLang] = useState<'hi' | 'en' | null>(null);
 
@@ -440,18 +442,73 @@ export const PhoneticGraphMatrix: React.FC<PhoneticGraphMatrixProps> = ({
         </div>
       </div>
 
-      {/* Guided Progression: Continue to Step C */}
-      {onProceedToCure && (
-        <div className="pt-3 border-t border-[#DFDBD2] flex justify-end">
-          <button
-            onClick={onProceedToCure}
-            className="flex items-center space-x-2 bg-[#162A45] hover:bg-[#1f3a5e] text-white px-5 py-2.5 rounded text-xs font-semibold shadow-sm transition-all"
-          >
-            <span>Continue to Step C: OpenCV Biometric Curing & Affidavit Synthesis</span>
-            <ArrowRight className="w-4 h-4 text-amber-300" />
-          </button>
-        </div>
-      )}
+      {/* Strict Step-Based Security & Eligibility Workflow Gate */}
+      {(() => {
+        const isStep2Passed = Boolean(
+          reconciliation &&
+          reconciliation.status === 'PASS' &&
+          (reconciliation.rejection_risk_score ?? 100) === 0
+        );
+
+        if (isStep2Passed) {
+          return (
+            <div className="pt-3 border-t border-[#DFDBD2]">
+              <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-center space-x-2 text-xs font-mono text-emerald-950">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <span>
+                    ✓ <strong>100% Verification Confirmed (0% Rejection Risk).</strong> All 4 gates cleared! Biometric auto-cure unlocked.
+                  </span>
+                </div>
+                {onProceedToCure && (
+                  <button
+                    onClick={onProceedToCure}
+                    className="flex items-center space-x-2 bg-emerald-700 hover:bg-emerald-800 text-white px-5 py-2.5 rounded-lg text-xs font-semibold shadow-sm transition-all"
+                  >
+                    <span>Proceed to Step 3: Biometric Auto-Cure &amp; Affidavit Studio</span>
+                    <ArrowRight className="w-4 h-4 text-amber-300" />
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        }
+
+        // Blocked State: Discrepancy or Risk > 0
+        const riskScore = reconciliation?.rejection_risk_score ?? 100;
+        return (
+          <div className="pt-3 border-t border-[#DFDBD2]">
+            <div className="bg-red-50 border border-red-300 rounded-xl p-4 space-y-3 shadow-xs">
+              <div className="flex items-center space-x-2 text-red-900 font-bold text-xs font-mono">
+                <ShieldAlert className="w-4 h-4 text-red-700 shrink-0" />
+                <span>MANDATORY SECURITY GATE BLOCKED — Rejection Risk: {riskScore}%</span>
+              </div>
+              <p className="text-xs text-red-800 leading-relaxed font-sans">
+                Government portal filing rules strictly prohibit progression while unresolved demographic discrepancies or OCR uncertainties exist.
+                You must resolve the flagged discrepancies before Step 3 (Biometric Curing) or Step 4 (Portal Automation) can be initiated.
+              </p>
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                {onReturnToStep1 && (
+                  <button
+                    onClick={onReturnToStep1}
+                    className="flex items-center space-x-2 bg-red-700 hover:bg-red-800 text-white px-4 py-2 rounded-lg text-xs font-semibold shadow-xs transition-all"
+                  >
+                    <span>← Return to Step 1 &amp; Replace Conflicting Documents</span>
+                  </button>
+                )}
+                <button
+                  disabled
+                  className="flex items-center space-x-2 bg-gray-200 text-gray-500 px-4 py-2 rounded-lg text-xs font-semibold cursor-not-allowed border border-gray-300"
+                  title="Step 2 requires 100% verification and 0% rejection risk before unlocking Step 3"
+                >
+                  <Lock className="w-3.5 h-3.5 text-gray-400" />
+                  <span>Step 3 Locked (0% Risk Required)</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

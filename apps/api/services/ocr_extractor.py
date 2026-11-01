@@ -534,11 +534,17 @@ class FreeMultimodalOCRExtractor:
 
             # Check Priority B1: Aadhaar Front TitleCase multi-token name immediately above DOB
             if not data.full_name and (doc_type_hint in ["aadhaar", "aadhaar_front"] or ("Aadhaar" in text or "UIDAI" in text or "DOB" in text)):
+                COMMON_INDIC_SURNAMES = {
+                    'GUPTA', 'SHARMA', 'SINGH', 'KUMAR', 'VERMA', 'PATEL', 'YADAV', 'MISHRA', 'PANDEY',
+                    'TIWARI', 'DEVI', 'JOSHI', 'CHOUDHARY', 'REDDY', 'RAO', 'SEN', 'DAS', 'BANERJEE',
+                    'CHATTERJEE', 'BOSE', 'DUTTA', 'NAIR', 'MENON', 'PILLAI', 'KHAN', 'AHMED', 'ALI'
+                }
+                aadhaar_name_candidates: list[str] = []
                 for i, line in enumerate(lines):
-                    if re.search(r'DOB|जन्म\s*तिथि', line, re.IGNORECASE):
+                    if re.search(r'DOB|जन्म\s*तिथि|RfR/DOB|MfA/D', line, re.IGNORECASE):
                         for k in reversed(range(max(0, i - 4), i)):
                             cand_line = lines[k]
-                            # 1. Prioritize clean TitleCase proper name match: e.g. "Siddhi Gupta"
+                            # 1. Clean TitleCase proper name match: e.g. "Siddhi Gupta"
                             title_m = re.search(r'\b([A-Z][a-z]{2,20}(?:\s+[A-Z][a-z]{2,20})+)\b', cand_line)
                             if title_m:
                                 cand_name = title_m.group(1).strip()
@@ -546,8 +552,7 @@ class FreeMultimodalOCRExtractor:
                                     "GOVERNMENT", "INDIA", "BHARAT", "ENROLLMENT", "AUTHORITY", "AADHAAR",
                                     "FEMALE", "MALE", "DOWNLOAD", "INCOME", "DEPARTMENT", "ACCOUNT", "UNIQUE", "IDENTIFICATION"
                                 ]):
-                                    data.full_name = cand_name
-                                    break
+                                    aadhaar_name_candidates.append(cand_name)
 
                             # 2. Look for ALL-CAPS multi-token name: e.g. "SIDDHI GUPTA"
                             caps_m = re.search(r'\b([A-Z]{3,20}(?:\s+[A-Z]{3,20})+)\b', cand_line)
@@ -557,8 +562,7 @@ class FreeMultimodalOCRExtractor:
                                     "GOVERNMENT", "INDIA", "BHARAT", "ENROLLMENT", "AUTHORITY", "AADHAAR",
                                     "FEMALE", "MALE", "DOWNLOAD", "INCOME", "DEPARTMENT", "ACCOUNT", "UNIQUE", "IDENTIFICATION"
                                 ]):
-                                    data.full_name = cand_name
-                                    break
+                                    aadhaar_name_candidates.append(cand_name)
 
                             # 3. Fallback: filter out 1-2 char noise prefixes (like 'bs', 'b', 's', 'B')
                             clean_line = re.sub(r'[^a-zA-Z\s]', ' ', cand_line)
@@ -573,10 +577,24 @@ class FreeMultimodalOCRExtractor:
                                     "GOVERNMENT", "INDIA", "BHARAT", "ENROLLMENT", "AUTHORITY", "AADHAAR",
                                     "FEMALE", "MALE", "DOWNLOAD", "INCOME", "DEPARTMENT", "ACCOUNT", "UNIQUE", "IDENTIFICATION"
                                 ]):
-                                    data.full_name = cand_name
-                                    break
-                        if data.full_name:
-                            break
+                                    aadhaar_name_candidates.append(cand_name)
+
+                if aadhaar_name_candidates:
+                    def _score_aadhaar_name(cand: str) -> float:
+                        toks = cand.split()
+                        sc = float(len(cand))
+                        if cand.istitle() or cand.isupper():
+                            sc += 10.0
+                        if len(toks) in [2, 3]:
+                            sc += 15.0
+                        if toks and toks[-1].upper() in COMMON_INDIC_SURNAMES:
+                            sc += 30.0
+                        if re.search(r'iid|uud|aae', cand, re.I):
+                            sc -= 25.0
+                        return sc
+
+                    aadhaar_name_candidates.sort(key=_score_aadhaar_name, reverse=True)
+                    data.full_name = aadhaar_name_candidates[0]
 
             # Check Priority B2: General Multi-Token Name (filtering out header and marksheet noise)
             if not data.full_name:

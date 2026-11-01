@@ -38,9 +38,9 @@ class Settings(BaseSettings):
     # Local Deterministic OCR
     TESSERACT_CMD: str = "/opt/homebrew/bin/tesseract"
     
-    # Playwright Automation
-    PLAYWRIGHT_HEADLESS: bool = True
-    PLAYWRIGHT_SLOW_MO_MS: int = 150
+    # Playwright Automation (Visible browser on desktop for full transparency)
+    PLAYWRIGHT_HEADLESS: bool = False
+    PLAYWRIGHT_SLOW_MO_MS: int = 350
     
     # Storage Dirs
     BASE_DIR: str = str(PROJECT_ROOT)

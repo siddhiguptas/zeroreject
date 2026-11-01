@@ -506,6 +506,59 @@ async def finalize_submission(
     portal_key = session_data.get("portal_key", "e_district_income")
     profile = PORTAL_PROFILES.get(portal_key, PORTAL_PROFILES["e_district_income"])
 
+    expected_otp = session_data.get("otp_expected")
+    submitted_otp = (citizen_otp or "").strip()
+
+    # Strict OTP Gate: Must match the dispatched OTP
+    if not expected_otp or submitted_otp != expected_otp:
+        applicant = session_data.get("applicant_name", "Citizen Applicant")
+        return HTMLResponse(
+            status_code=400,
+            content=render_page(
+                "Step 4 - OTP Verification Rejection",
+                f"""
+                <div class="max-w-lg mx-auto py-6 space-y-5">
+                    <div id="otp-error" class="bg-red-50 border-l-4 border-red-600 p-5 rounded text-red-950 shadow-sm">
+                        <h4 class="font-bold text-base text-red-900 flex items-center gap-2">
+                            <span>❌ REJECTION: Authentication Code Mismatch</span>
+                        </h4>
+                        <p class="text-xs text-red-800 mt-2 leading-relaxed">
+                            The submitted verification code <code>'{submitted_otp or "[EMPTY]"}'</code> was rejected by the State Gateway.
+                            The code does not match the valid OTP generated for this transaction session.
+                        </p>
+                    </div>
+
+                    <form id="step4-otp-form" action="/finalize" method="POST" class="space-y-5 bg-white p-5 border border-gray-200 rounded">
+                        <input type="hidden" name="gov_sess_id" value="{gov_sess_id}">
+                        
+                        <div>
+                            <label for="citizen_otp" class="block text-sm font-semibold text-gray-700 mb-1">Re-enter 6-Digit Verification OTP *</label>
+                            <input type="text" id="citizen_otp" name="citizen_otp" required maxlength="6" pattern="[0-9]{{6}}"
+                                   placeholder="Enter 6-digit OTP"
+                                   class="w-64 px-3 py-2 border border-red-300 rounded font-mono text-lg tracking-widest focus:ring-2 focus:ring-blue-600 focus:outline-none">
+                        </div>
+
+                        <div class="flex items-center space-x-2">
+                            <input type="checkbox" id="citizen_consent" name="citizen_consent" required checked
+                                   class="h-4 w-4 text-blue-800 focus:ring-blue-500 border-gray-300 rounded">
+                            <label for="citizen_consent" class="text-xs text-gray-700">
+                                I, {applicant}, hereby authorize submission of my application and self-declaration affidavit.
+                            </label>
+                        </div>
+
+                        <div class="pt-2">
+                            <button type="submit" id="btn-authorize-final" class="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-6 py-2.5 rounded shadow text-sm">
+                                ✓ Re-authorize &amp; Submit Filing
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                """,
+                step=4,
+                portal_key=portal_key
+            )
+        )
+
     prefix_map = {
         "national_scholarship": "NSP-2026",
         "epfo_joint_declaration": "EPFO-JD-2026",

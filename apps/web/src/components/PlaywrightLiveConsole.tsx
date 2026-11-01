@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, RotateCcw, AlertTriangle, ShieldCheck, Terminal, CheckCircle2, Lock, Zap, Download, Check, ExternalLink } from 'lucide-react';
+import { Play, RotateCcw, AlertTriangle, AlertCircle, ShieldCheck, Terminal, CheckCircle2, Lock, Zap, Download, Check, ExternalLink } from 'lucide-react';
 import { ExecutionStepEvent } from '@/types';
 import { createExecutionEventSource, toggleChaos, authorizeOtp } from '@/lib/api-client';
 
@@ -29,6 +29,7 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
   const [detectedOtp, setDetectedOtp] = useState('');
   const [receiptAck, setReceiptAck] = useState<string | null>(null);
   const [isSubmittingOtp, setIsSubmittingOtp] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const logContainerRef = useRef<HTMLDivElement>(null);
 
@@ -80,7 +81,6 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
           const dynamicOtp = (event as any).otp_code;
           if (dynamicOtp) {
             setDetectedOtp(dynamicOtp);
-            setOtpCode(dynamicOtp);
             onOtpDetected?.(dynamicOtp);
           }
         } else if (event.status === 'SUBMITTED') {
@@ -103,16 +103,22 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
   };
 
   const handleAuthorizeOtp = async () => {
-    const codeToSubmit = otpCode.trim() || detectedOtp || '719340';
+    const codeToSubmit = otpCode.trim();
+    if (!codeToSubmit || codeToSubmit.length !== 6) {
+      setAuthError("Please enter the complete 6-digit OTP code requested by the portal.");
+      return;
+    }
     if (!sessionId) return;
     setIsSubmittingOtp(true);
+    setAuthError(null);
     try {
       const res = await authorizeOtp(sessionId, codeToSubmit);
       setReceiptAck(res.acknowledgement_number);
       setStatus('VERIFIED');
       onExecutionStateChange?.('VERIFIED');
-    } catch (e) {
+    } catch (e: any) {
       console.error('OTP authorization failed', e);
+      setAuthError(e?.message || 'Government portal rejected OTP authentication. Please verify the code.');
     } finally {
       setIsSubmittingOtp(false);
     }
@@ -345,24 +351,28 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
                 <span>Human-in-the-Loop Citizen Authorization Gate</span>
               </div>
 
-              {/* Realistic SMS Sandbox Simulator Chip */}
-              <button
-                type="button"
-                onClick={() => setOtpCode(detectedOtp || '719340')}
-                className="w-full text-left bg-[#0F172A] hover:bg-[#162A45] border border-amber-500/40 p-2 rounded text-[11px] font-mono text-amber-200 transition-colors flex items-center justify-between"
-              >
-                <span>📱 SMS Dispatch Simulator (Local Sandbox): OTP is <strong>{detectedOtp || '719340'}</strong></span>
-                <span className="text-amber-400 font-bold underline text-[10px]">[ Auto-Fill OTP ]</span>
-              </button>
+              <div className="bg-[#0F172A] border border-amber-500/40 p-2.5 rounded text-[11px] font-mono text-amber-200">
+                <span>Target Portal challenge active. Check the visible Chromium browser window on your screen and input the 6-digit OTP below:</span>
+              </div>
+
+              {authError && (
+                <div className="bg-red-950/90 border border-red-500/80 p-2 rounded text-[11px] font-mono text-red-200 flex items-center space-x-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                  <span>{authError}</span>
+                </div>
+              )}
 
               <div className="flex space-x-2 pt-1">
                 <input
                   type="text"
                   value={otpCode}
-                  placeholder={detectedOtp || '719340'}
-                  onChange={(e) => setOtpCode(e.target.value)}
+                  placeholder="6-digit OTP"
+                  onChange={(e) => {
+                    setOtpCode(e.target.value);
+                    if (authError) setAuthError(null);
+                  }}
                   maxLength={6}
-                  className="w-28 bg-[#0F172A] border border-slate-600 rounded px-2.5 py-1.5 text-center font-mono font-bold text-white text-sm tracking-widest focus:outline-none focus:border-amber-400"
+                  className="w-36 bg-[#0F172A] border border-slate-600 rounded px-2.5 py-1.5 text-center font-mono font-bold text-white text-sm tracking-widest focus:outline-none focus:border-amber-400"
                 />
                 <button
                   onClick={handleAuthorizeOtp}
@@ -370,7 +380,7 @@ export const PlaywrightLiveConsole: React.FC<PlaywrightLiveConsoleProps> = ({
                   className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded px-3 py-1.5 text-xs font-bold font-mono transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center space-x-1.5"
                 >
                   <Check className="w-3.5 h-3.5" />
-                  <span>{isSubmittingOtp ? 'Verifying & Stamping...' : '✓ Authorize Final Filing'}</span>
+                  <span>{isSubmittingOtp ? 'Submitting to Portal...' : '✓ Authorize Final Filing'}</span>
                 </button>
               </div>
             </div>
